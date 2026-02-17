@@ -294,22 +294,32 @@ window.app.checkIn = async (aluId, aid) => {
 // --- PAGOS LOGIC ---
 document.getElementById('concepto').addEventListener('change', async (e) => {
     const c = e.target.value;
-    // compatibilidad: preferimos el input hidden id pago-alumno-id, si no existe se toma valor del select pago-alumno-select
     const aluInput = document.getElementById('pago-alumno-id');
     const aluSelect = document.getElementById('pago-alumno-select');
     const alu = aluInput?.value || (aluSelect?.value || '');
+    
     document.getElementById('pago-id-container').classList.add('hidden');
     document.getElementById('extra-classes-container').classList.add('hidden');
 
     if ((c === 'pago_parcial' || c === 'clases_extra') && alu) {
         const snap = await get(ref(db, 'pagos_tipo_a'));
         const selId = document.getElementById('pago-id-select');
-        selId.innerHTML = '<option>Seleccionar ID Activo</option>';
+        selId.innerHTML = '<option value="">Seleccionar ID Activo</option>';
+        
         if (snap.exists()) {
             const hoy = new Date();
             Object.entries(snap.val()).forEach(([k, p]) => {
-                if (p.alumnoId === alu && new Date(p.fechaVencimiento) > hoy) {
-                    selId.innerHTML += `<option value="${k}">ID: ${k.slice(-6)} (Adeudo: $${p.faltante || 0})</option>`;
+                const esActivo = new Date(p.fechaVencimiento) > hoy;
+                const tieneDeuda = (p.faltante || 0) > 0;
+
+                // REGLA 1: Pago Parcial -> Solo activos con deuda
+                if (c === 'pago_parcial' && p.alumnoId === alu && esActivo && tieneDeuda) {
+                    selId.innerHTML += `<option value="${k}">ID: ${k.slice(-6)} (Adeudo: $${p.faltante})</option>`;
+                    document.getElementById('pago-id-container').classList.remove('hidden');
+                }
+                // REGLA 2: Clases Extra -> Solo activos sin deuda
+                else if (c === 'clases_extra' && p.alumnoId === alu && esActivo && !tieneDeuda) {
+                    selId.innerHTML += `<option value="${k}">ID: ${k.slice(-6)} (Pagado)</option>`;
                     document.getElementById('pago-id-container').classList.remove('hidden');
                 }
             });
@@ -333,7 +343,7 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
     try {
         if (c === 'mensualidad') {
             const pRef = push(ref(db, 'pagos_tipo_a'));
-            await set(pRef, { alumnoId: alu, monto, faltante, concepto: c, fechaVencimiento: fv.toISOString(), clasesExtra: 0, medioPago: medio, observaciones });
+            await set(pRef, { alumnoId: alu, monto, faltante, concepto: c,fechaCreacion: new Date().toISOString(), fechaVencimiento: fv.toISOString(), clasesExtra: 0, medioPago: medio, observaciones });
             for(let i=0; i<3; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pRef.key, tomada: false });
         } else if (c === 'clases_extra') {
             const pId = document.getElementById('pago-id-select').value;
@@ -349,17 +359,17 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
             const pRef = ref(db, `pagos_tipo_a/${pId}`);
             const pData = (await get(pRef)).val();
             await update(pRef, { monto: (pData.monto || 0) + monto, faltante: Math.max(0, (pData.faltante || 0) - monto), medioPago: medio, observaciones: (pData.observaciones || '') + '\n' + observaciones });
+        // Dentro de register-pago-form submit, localiza el bloque else if (c === 'actividad_b')
         } else if (c === 'actividad_b') {
-            // nuevo: pagos tipo B (actividades extra tipo B)
-            // se guardan en 'pagos_tipo_b' y se relacionan por alumnoId
             const pRef = push(ref(db, 'pagos_tipo_b'));
             const payload = {
                 alumnoId: alu,
-                monto,
+                monto: monto,
+                faltante: faltante, // <-- Cambio: Ahora guarda el faltante
                 concepto: 'actividad_b',
                 fecha: new Date().toISOString(),
                 medioPago: medio,
-                observaciones,
+                observaciones: observaciones,
                 descripcion: 'Actividad Extra Tipo B'
             };
             await set(pRef, payload);
