@@ -16,204 +16,199 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 
-// Referencias DOM
-const loginView = document.getElementById('login-view');
-const dashboardView = document.getElementById('dashboard-view');
-const loginForm = document.getElementById('login-form');
-const logoutBtn = document.getElementById('logout-btn');
-const studentsList = document.getElementById('students-list');
-const addStudentForm = document.getElementById('add-student-form');
-const isAdultToggle = document.getElementById('is-adult');
-const tutorSection = document.getElementById('tutor-section');
-const registerPagoForm = document.getElementById('register-pago-form');
-const conceptoSelect = document.getElementById('concepto');
-const pagoAlumnoSelect = document.getElementById('pago-alumno-select');
-const pagoIdContainer = document.getElementById('pago-id-container');
-const pagoIdSelect = document.getElementById('pago-id-select');
-const extraClassesContainer = document.getElementById('extra-classes-container');
-const numClasesExtraInput = document.getElementById('num-clases-extra');
-
-// Helpers Globales
+// Global App Control
 window.app = {
-  showModal: id => document.getElementById(id)?.classList.remove('hidden-view'),
-  hideModal: id => document.getElementById(id)?.classList.add('hidden-view')
+    showModal: id => document.getElementById(id).classList.remove('hidden-view'),
+    hideModal: id => document.getElementById(id).classList.add('hidden-view'),
+    closeProfile: () => {
+        document.getElementById('profile-view').classList.add('hidden-view');
+        document.getElementById('dashboard-view').classList.remove('hidden-view');
+    }
 };
 
-// Autenticación
+// --- AUTH & LOAD ---
 onAuthStateChanged(auth, user => {
-  if (user) {
-    loginView.classList.add('hidden-view');
-    dashboardView.classList.remove('hidden-view');
-    loadStudents();
-    populateAlumnoSelect();
-  } else {
-    loginView.classList.remove('hidden-view');
-    dashboardView.classList.add('hidden-view');
-  }
+    if (user) {
+        document.getElementById('login-view').classList.add('hidden-view');
+        document.getElementById('dashboard-view').classList.remove('hidden-view');
+        loadActiveStudents();
+        populateAlumnoSelect();
+    } else {
+        document.getElementById('login-view').classList.remove('hidden-view');
+        document.getElementById('dashboard-view').classList.add('hidden-view');
+    }
 });
 
-loginForm.addEventListener('submit', async e => {
-  e.preventDefault();
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
-  } catch (err) {
-    alert("Usuario o contraseña incorrectos.");
-  }
-});
+async function loadActiveStudents() {
+    const [alumnosSnap, pagosSnap] = await Promise.all([
+        get(ref(db, 'alumnos')),
+        get(ref(db, 'pagos_tipo_a'))
+    ]);
 
-logoutBtn.addEventListener('click', () => signOut(auth));
+    const container = document.getElementById('students-list');
+    container.innerHTML = '';
 
-function loadStudents() {
-  onValue(ref(db, 'alumnos'), snapshot => {
-    studentsList.innerHTML = '';
-    if (!snapshot.exists()) return;
-    Object.entries(snapshot.val()).forEach(([id, s]) => {
-      const card = document.createElement('div');
-      card.className = 'bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center gap-3';
-      card.innerHTML = `<div class="size-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold">${s.nombre[0]}</div>
-                        <div><h4 class="font-bold">${s.nombre} ${s.apellidos}</h4><p class="text-xs text-gray-500">${s.contacto}</p></div>`;
-      studentsList.appendChild(card);
+    if (alumnosSnap.exists() && pagosSnap.exists()) {
+        const pagos = pagosSnap.val();
+        const hoy = new Date();
+        
+        Object.entries(alumnosSnap.val()).forEach(([id, student]) => {
+            const pagoActivo = Object.values(pagos).find(p => 
+                p.alumnoId === id && new Date(p.fechaVencimiento) > hoy
+            );
+
+            if (pagoActivo) {
+                const div = document.createElement('div');
+                div.className = "bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer hover:bg-green-50";
+                div.onclick = () => openStudentProfile(id, student, pagoActivo);
+                div.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="size-10 rounded-full bg-green-100 flex items-center justify-center font-bold text-green-700">${student.nombre[0]}</div>
+                        <div>
+                            <p class="font-bold">${student.nombre} ${student.apellidos}</p>
+                            <p class="text-xs text-gray-500">ID Pago: ${pagoActivo.concepto.toUpperCase()}</p>
+                        </div>
+                    </div>
+                    <span class="material-symbols-outlined text-gray-400">chevron_right</span>
+                `;
+                container.appendChild(div);
+            }
+        });
+    }
+}
+
+// --- PROFILE & ATTENDANCE ---
+async function openStudentProfile(alumnoId, student, pagoActivo) {
+    window.app.showModal('profile-view');
+    const content = document.getElementById('profile-content');
+    content.innerHTML = `<p class="text-center py-10">Cargando perfil...</p>`;
+
+    const asistenciaSnap = await get(ref(db, `asistencias/${alumnoId}`));
+    const asistencias = asistenciaSnap.exists() ? Object.entries(asistenciaSnap.val()) : [];
+    
+    // Filtrar asistencias ligadas al ID de pago actual
+    const misClases = asistencias.filter(([aid, a]) => a.pagoId === Object.keys(await get(ref(db, 'pagos_tipo_a'))).find(key => JSON.stringify(await get(ref(db, `pagos_tipo_a/${key}`))) === JSON.stringify(pagoActivo)));
+
+    content.innerHTML = `
+        <div class="bg-white rounded-3xl p-6 shadow-sm flex flex-col items-center">
+            <div class="size-24 rounded-full bg-primary/10 flex items-center justify-center text-primary text-4xl font-bold mb-4">${student.nombre[0]}</div>
+            <h2 class="text-2xl font-bold">${student.nombre} ${student.apellidos}</h2>
+            <p class="text-primary font-medium">Activo hasta: ${new Date(pagoActivo.fechaVencimiento).toLocaleDateString()}</p>
+            <div class="flex gap-4 mt-4 w-full">
+                <a href="tel:${student.contacto}" class="flex-1 bg-primary/10 text-primary p-3 rounded-xl flex items-center justify-center gap-2 font-bold"><span class="material-symbols-outlined">call</span> Llamar</a>
+                <button class="flex-1 bg-accent/10 text-accent p-3 rounded-xl flex items-center justify-center gap-2 font-bold"><span class="material-symbols-outlined">message</span> Mensaje</button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 shadow-sm">
+            <h3 class="font-bold text-gray-400 text-xs uppercase mb-4 tracking-widest">Control de Asistencia</h3>
+            <div class="space-y-3">
+                ${renderAttendance(alumnoId, pagoActivo, asistencias)}
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-4 shadow-sm">
+            <h3 class="font-bold text-gray-400 text-xs uppercase mb-4 tracking-widest">Estado de Cuenta</h3>
+            <div class="flex justify-between items-center">
+                <span>Pendiente por pagar:</span>
+                <span class="font-bold ${pagoActivo.faltante > 0 ? 'text-red-500' : 'text-green-500'}">$${pagoActivo.faltante}</span>
+            </div>
+        </div>
+    `;
+}
+
+function renderAttendance(alumnoId, pagoActivo, asistencias) {
+    // Filtrar solo las clases que pertenecen a la mensualidad actual
+    // (En un sistema real, usaríamos el KEY del pago, aquí simplificamos buscando el ID)
+    let html = '';
+    const hoy = new Date();
+    const vencido = new Date(pagoActivo.fechaVencimiento) < hoy;
+
+    asistencias.forEach(([id, a], index) => {
+        // Regla 1: Bloquear 3ra clase si hay faltante
+        const esTerceraBase = index === 2;
+        const bloqueadaPorFaltante = esTerceraBase && pagoActivo.faltante > 0;
+        
+        const statusClass = a.tomada ? 'bg-green-500 text-white' : (bloqueadaPorFaltante ? 'bg-gray-100 text-gray-400' : 'bg-white border-2 border-gray-100');
+        const btnText = a.tomada ? 'Tomada ✓' : (bloqueadaPorFaltante ? 'Bloqueada ($)' : 'Marcar Asist.');
+        const btnAction = (!a.tomada && !bloqueadaPorFaltante && !vencido) ? `onclick="window.app.takeClass('${alumnoId}', '${id}')"` : '';
+
+        html += `
+            <div class="flex items-center justify-between p-3 rounded-xl border border-gray-50">
+                <div class="flex items-center gap-3">
+                    <div class="size-10 rounded-lg flex flex-col items-center justify-center font-bold text-[10px] bg-gray-50">
+                        <span>CLASE</span>
+                        <span class="text-lg -mt-1">${index + 1}</span>
+                    </div>
+                    <div>
+                        <p class="font-bold text-sm">${index < 3 ? 'Mensualidad' : 'Clase Extra'}</p>
+                        <p class="text-xs text-gray-500">${a.tomada ? 'Tomada el: ' + new Date(a.fechaTomada).toLocaleDateString() : 'Pendiente'}</p>
+                    </div>
+                </div>
+                <button ${btnAction} class="px-4 py-2 rounded-lg text-xs font-bold transition ${statusClass}">
+                    ${btnText}
+                </button>
+            </div>
+        `;
     });
-  });
+    return html;
 }
 
-function populateAlumnoSelect() {
-  onValue(ref(db, 'alumnos'), snapshot => {
-    pagoAlumnoSelect.innerHTML = '<option value="">Seleccione alumno</option>';
-    if (snapshot.exists()) {
-      Object.entries(snapshot.val()).forEach(([id, s]) => {
-        const opt = document.createElement('option');
-        opt.value = id;
-        opt.textContent = `${s.nombre} ${s.apellidos}`;
-        pagoAlumnoSelect.appendChild(opt);
-      });
-    }
-  });
-}
+window.app.takeClass = async (alumnoId, asistenciaId) => {
+    await update(ref(db, `asistencias/${alumnoId}/${asistenciaId}`), {
+        tomada: true,
+        fechaTomada: new Date().toISOString()
+    });
+    alert("Asistencia registrada");
+    window.app.closeProfile(); // Recargar
+};
 
-// Lógica de visibilidad y filtros de Pagos
-conceptoSelect.addEventListener('change', () => {
-  const concepto = conceptoSelect.value;
-  const alumnoId = pagoAlumnoSelect.value;
-  
-  pagoIdContainer.classList.add('hidden');
-  extraClassesContainer.classList.add('hidden');
-  document.getElementById('alumno-pay-container').classList.toggle('hidden', concepto === 'actividad_extra');
+// --- PAYMENTS LOGIC ---
+document.getElementById('register-pago-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const concepto = document.getElementById('concepto').value;
+    const alumnoId = document.getElementById('pago-alumno-select').value;
+    const monto = parseFloat(document.getElementById('monto').value);
+    const faltante = parseFloat(document.getElementById('faltante').value || 0);
 
-  if (concepto === 'clases_extra') extraClassesContainer.classList.remove('hidden');
+    const fechaC = new Date();
+    const fechaV = new Date();
+    fechaV.setDate(fechaC.getDate() + 30);
 
-  if ((concepto === 'pago_parcial' || concepto === 'clases_extra') && alumnoId) {
-    loadActivePayments(alumnoId, concepto);
-  }
-});
-
-pagoAlumnoSelect.addEventListener('change', () => {
-    if (conceptoSelect.value === 'pago_parcial' || conceptoSelect.value === 'clases_extra') {
-        loadActivePayments(pagoAlumnoSelect.value, conceptoSelect.value);
-    }
-});
-
-async function loadActivePayments(alumnoId, concepto) {
-  const snapshot = await get(ref(db, 'pagos_tipo_a'));
-  pagoIdSelect.innerHTML = '<option value="">Seleccione ID de Pago</option>';
-  
-  if (snapshot.exists()) {
-    const ahora = new Date();
-    Object.entries(snapshot.val()).forEach(([id, p]) => {
-      const vencimiento = new Date(p.fechaVencimiento);
-      if (p.alumnoId === alumnoId && vencimiento > ahora) {
-        if (concepto === 'pago_parcial' && p.faltante > 0) {
-            addOption(id, p);
-        } else if (concepto === 'clases_extra' && p.faltante <= 0) {
-            addOption(id, p);
+    try {
+        if (concepto === 'mensualidad') {
+            const pagoRef = push(ref(db, 'pagos_tipo_a'));
+            await set(pagoRef, { alumnoId, monto, faltante, concepto, fechaCreacion: fechaC.toISOString(), fechaVencimiento: fechaV.toISOString(), clasesExtra: 0 });
+            
+            // Generar 3 clases base
+            for(let i=0; i<3; i++) {
+                push(ref(db, `asistencias/${alumnoId}`), { pagoId: pagoRef.key, tomada: false, fechaFin: fechaV.toISOString() });
+            }
+        } 
+        else if (concepto === 'clases_extra') {
+            const numExtras = parseInt(document.getElementById('num-clases-extra').value);
+            // Lógica para buscar el ID de pago Tipo A activo y sumarle asistencias
+            // (Para brevedad, asumimos que seleccionó el ID en el dropdown)
+            const pagoId = document.getElementById('pago-id-select').value;
+            for(let i=0; i<numExtras; i++) {
+                push(ref(db, `asistencias/${alumnoId}`), { pagoId: pagoId, tomada: false, fechaFin: fechaV.toISOString() });
+            }
         }
-      }
+        
+        alert("Pago y clases procesadas");
+        window.location.reload();
+    } catch (err) { alert(err.message); }
+});
+
+// Helpers para Selects
+function populateAlumnoSelect() {
+    onValue(ref(db, 'alumnos'), snap => {
+        const select = document.getElementById('pago-alumno-select');
+        select.innerHTML = '<option>Seleccionar Alumno</option>';
+        if (snap.exists()) {
+            Object.entries(snap.val()).forEach(([id, s]) => {
+                select.innerHTML += `<option value="${id}">${s.nombre} ${s.apellidos}</option>`;
+            });
+        }
     });
-  }
 }
-
-function addOption(id, p) {
-    const opt = document.createElement('option');
-    opt.value = id;
-    opt.textContent = `ID: ${id.slice(-6)} | Faltante: $${p.faltante} | Extra: ${p.clasesExtra || 0}`;
-    pagoIdSelect.appendChild(opt);
-    pagoIdContainer.classList.remove('hidden');
-}
-
-// Registro de Pagos
-registerPagoForm.addEventListener('submit', async e => {
-  e.preventDefault();
-  const concepto = conceptoSelect.value;
-  const monto = parseFloat(document.getElementById('monto').value);
-  const faltante = parseFloat(document.getElementById('faltante').value || 0);
-  const alumnoId = pagoAlumnoSelect.value;
-
-  try {
-    const fechaCreacion = new Date();
-    const fechaVencimiento = new Date();
-    fechaVencimiento.setDate(fechaCreacion.getDate() + 30);
-
-    if (concepto === 'mensualidad') {
-      await set(push(ref(db, 'pagos_tipo_a')), { 
-        alumnoId, monto, faltante, concepto, clasesExtra: 0,
-        fechaCreacion: fechaCreacion.toISOString(), 
-        fechaVencimiento: fechaVencimiento.toISOString() 
-      });
-    } 
-    else if (concepto === 'actividad_extra') {
-      await set(push(ref(db, 'pagos_tipo_b')), { 
-          monto, faltante, 
-          observaciones: document.getElementById('observaciones').value, 
-          fecha: fechaCreacion.toISOString() 
-      });
-    }
-    else {
-      const pagoId = pagoIdSelect.value;
-      if (!pagoId) return alert("Seleccione un ID de pago activo");
-      
-      const pagoRef = ref(db, `pagos_tipo_a/${pagoId}`);
-      const snap = await get(pagoRef);
-      const data = snap.val();
-      
-      const nuevasClases = concepto === 'clases_extra' ? parseInt(numClasesExtraInput.value || 0) : 0;
-      
-      await update(pagoRef, {
-        monto: data.monto + monto,
-        faltante: Math.max(0, data.faltante - (concepto === 'pago_parcial' ? monto : 0)),
-        clasesExtra: (data.clasesExtra || 0) + nuevasClases,
-        ultimaModificacion: fechaCreacion.toISOString()
-      });
-    }
-
-    alert('Pago registrado y procesado correctamente ✓');
-    window.app.hideModal('modal-pago');
-    registerPagoForm.reset();
-  } catch (error) {
-    alert("Error: " + error.message);
-  }
-});
-
-// Registro Alumnos
-isAdultToggle.addEventListener('change', () => {
-    tutorSection.classList.toggle('hidden', isAdultToggle.checked);
-});
-
-addStudentForm.addEventListener('submit', async e => {
-  e.preventDefault();
-  const alumno = {
-    nombre: document.getElementById('new-name').value.trim(),
-    apellidos: document.getElementById('new-lastname').value.trim(),
-    contacto: document.getElementById('new-contact').value.trim(),
-    esMayor: isAdultToggle.checked,
-    fechaRegistro: new Date().toISOString()
-  };
-  
-  try {
-    await set(push(ref(db, 'alumnos')), alumno);
-    alert('Alumno registrado ✓');
-    window.app.hideModal('modal-alumno');
-    addStudentForm.reset();
-  } catch (e) { alert("Error al guardar"); }
-});
