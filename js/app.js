@@ -1,14 +1,11 @@
-// js/app.js
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
-import { getDatabase, ref, push, set, onValue } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
+import { getDatabase, ref, push, set, onValue, update, get } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
 
-// ─── Configuración Firebase ────────────────────────────────────────
 const firebaseConfig = {
   apiKey: "AIzaSyCdNroefbfgKJcKT5nR6UAcx1mckosqRM4",
   authDomain: "bd-personal-c3e4d.firebaseapp.com",
-  databaseURL: "https://bd-personal-c3e4d-default-rtdb.firebaseio.com", // ← verifica que sea tu URL real
+  databaseURL: "https://bd-personal-c3e4d-default-rtdb.firebaseio.com",
   projectId: "bd-personal-c3e4d",
   storageBucket: "bd-personal-c3e4d.firebasestorage.app",
   messagingSenderId: "739560517872",
@@ -19,29 +16,36 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 
-// ─── Referencias DOM ───────────────────────────────────────────────
-const loginView       = document.getElementById('login-view');
-const dashboardView   = document.getElementById('dashboard-view');
-const loginForm       = document.getElementById('login-form');
-const loginError      = document.getElementById('login-error');
-const logoutBtn       = document.getElementById('logout-btn');
-const studentsList    = document.getElementById('students-list');
-const addStudentForm  = document.getElementById('add-student-form');
-const isAdultToggle   = document.getElementById('is-adult');
-const tutorSection    = document.getElementById('tutor-section');
+// Referencias DOM
+const loginView = document.getElementById('login-view');
+const dashboardView = document.getElementById('dashboard-view');
+const loginForm = document.getElementById('login-form');
+const logoutBtn = document.getElementById('logout-btn');
+const studentsList = document.getElementById('students-list');
+const addStudentForm = document.getElementById('add-student-form');
+const isAdultToggle = document.getElementById('is-adult');
+const tutorSection = document.getElementById('tutor-section');
+const registerPagoForm = document.getElementById('register-pago-form');
+const conceptoSelect = document.getElementById('concepto');
+const pagoAlumnoSelect = document.getElementById('pago-alumno-select');
+const pagoIdContainer = document.getElementById('pago-id-container');
+const pagoIdSelect = document.getElementById('pago-id-select');
+const extraClassesContainer = document.getElementById('extra-classes-container');
+const numClasesExtraInput = document.getElementById('num-clases-extra');
 
-// ─── Helpers ───────────────────────────────────────────────────────
+// Helpers Globales
 window.app = {
   showModal: id => document.getElementById(id)?.classList.remove('hidden-view'),
   hideModal: id => document.getElementById(id)?.classList.add('hidden-view')
 };
 
-// ─── Autenticación ─────────────────────────────────────────────────
+// Autenticación
 onAuthStateChanged(auth, user => {
   if (user) {
     loginView.classList.add('hidden-view');
     dashboardView.classList.remove('hidden-view');
     loadStudents();
+    populateAlumnoSelect();
   } else {
     loginView.classList.remove('hidden-view');
     dashboardView.classList.add('hidden-view');
@@ -54,100 +58,162 @@ loginForm.addEventListener('submit', async e => {
   const password = document.getElementById('password').value;
   try {
     await signInWithEmailAndPassword(auth, email, password);
-    loginError.classList.add('hidden');
   } catch (err) {
-    loginError.textContent = "Usuario o contraseña incorrectos.";
-    loginError.classList.remove('hidden');
+    alert("Usuario o contraseña incorrectos.");
   }
 });
 
 logoutBtn.addEventListener('click', () => signOut(auth));
 
-// ─── Cargar lista de alumnos ───────────────────────────────────────
 function loadStudents() {
-  const alumnosRef = ref(db, 'alumnos');
-  studentsList.innerHTML = '<p class="text-center text-gray-500">Cargando alumnos...</p>';
-
-  onValue(alumnosRef, snapshot => {
+  onValue(ref(db, 'alumnos'), snapshot => {
     studentsList.innerHTML = '';
-    if (!snapshot.exists()) {
-      studentsList.innerHTML = '<p class="text-center text-gray-500 py-8">No hay alumnos registrados.</p>';
-      return;
-    }
-
-    const alumnos = snapshot.val();
-    Object.values(alumnos).forEach(student => {
+    if (!snapshot.exists()) return;
+    Object.entries(snapshot.val()).forEach(([id, s]) => {
       const card = document.createElement('div');
-      card.className = 'bg-white rounded-xl p-4 shadow-sm border border-gray-200 flex items-center gap-3';
-      card.innerHTML = `
-        <div class="size-12 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xl">
-          ${student.nombre.charAt(0).toUpperCase()}
-        </div>
-        <div class="flex-1">
-          <h4 class="font-semibold">${student.nombre} ${student.apellidos || ''}</h4>
-          <p class="text-sm text-gray-600">${student.contacto}</p>
-          ${student.tutor ? `<p class="text-xs text-gray-500">Tutor: ${student.tutor.nombre}</p>` : ''}
-        </div>
-      `;
+      card.className = 'bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center gap-3';
+      card.innerHTML = `<div class="size-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold">${s.nombre[0]}</div>
+                        <div><h4 class="font-bold">${s.nombre} ${s.apellidos}</h4><p class="text-xs text-gray-500">${s.contacto}</p></div>`;
       studentsList.appendChild(card);
     });
   });
 }
 
-// ─── Registrar Alumno ──────────────────────────────────────────────
-addStudentForm.addEventListener('submit', async e => {
-  e.preventDefault();
-
-  const nombre    = document.getElementById('new-name')?.value.trim();
-  const apellidos = document.getElementById('new-lastname')?.value.trim();
-  const contacto  = document.getElementById('new-contact')?.value.trim();
-  const esMayor   = document.getElementById('is-adult')?.checked;
-
-  if (!nombre || !apellidos || !contacto) {
-    alert('Nombre, apellidos y contacto son obligatorios.');
-    return;
-  }
-
-  let tutor = null;
-  if (!esMayor) {
-    const tutorNombre = document.getElementById('tutor-name')?.value.trim();
-    const tutorTelefono = document.getElementById('tutor-phone')?.value.trim();
-    if (!tutorNombre || !tutorTelefono) {
-      alert('Para menores se requiere nombre y teléfono del tutor.');
-      return;
+function populateAlumnoSelect() {
+  onValue(ref(db, 'alumnos'), snapshot => {
+    pagoAlumnoSelect.innerHTML = '<option value="">Seleccione alumno</option>';
+    if (snapshot.exists()) {
+      Object.entries(snapshot.val()).forEach(([id, s]) => {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = `${s.nombre} ${s.apellidos}`;
+        pagoAlumnoSelect.appendChild(opt);
+      });
     }
-    tutor = { nombre: tutorNombre, telefono: tutorTelefono };
-  }
+  });
+}
 
-  const alumno = {
-    nombre,
-    apellidos,
-    contacto,
-    esMayor,
-    tutor,
-    fechaRegistro: new Date().toISOString()
-  };
+// Lógica de visibilidad y filtros de Pagos
+conceptoSelect.addEventListener('change', () => {
+  const concepto = conceptoSelect.value;
+  const alumnoId = pagoAlumnoSelect.value;
+  
+  pagoIdContainer.classList.add('hidden');
+  extraClassesContainer.classList.add('hidden');
+  document.getElementById('alumno-pay-container').classList.toggle('hidden', concepto === 'actividad_extra');
 
-  try {
-    const nuevoRef = push(ref(db, 'alumnos'));
-    await set(nuevoRef, alumno);
-    alert('Alumno registrado correctamente ✓');
-    app.hideModal('modal-alumno');
-    addStudentForm.reset();
-    isAdultToggle.checked = true;
-    tutorSection.classList.add('hidden');
-    loadStudents();
-  } catch (error) {
-    console.error('Error al guardar alumno:', error);
-    alert('No se pudo registrar el alumno. Revisa la consola.');
+  if (concepto === 'clases_extra') extraClassesContainer.classList.remove('hidden');
+
+  if ((concepto === 'pago_parcial' || concepto === 'clases_extra') && alumnoId) {
+    loadActivePayments(alumnoId, concepto);
   }
 });
 
-// ─── Toggle sección tutor ──────────────────────────────────────────
-isAdultToggle?.addEventListener('change', () => {
-  tutorSection.classList.toggle('hidden', isAdultToggle.checked);
-  if (isAdultToggle.checked) {
-    document.getElementById('tutor-name').value = '';
-    document.getElementById('tutor-phone').value = '';
+pagoAlumnoSelect.addEventListener('change', () => {
+    if (conceptoSelect.value === 'pago_parcial' || conceptoSelect.value === 'clases_extra') {
+        loadActivePayments(pagoAlumnoSelect.value, conceptoSelect.value);
+    }
+});
+
+async function loadActivePayments(alumnoId, concepto) {
+  const snapshot = await get(ref(db, 'pagos_tipo_a'));
+  pagoIdSelect.innerHTML = '<option value="">Seleccione ID de Pago</option>';
+  
+  if (snapshot.exists()) {
+    const ahora = new Date();
+    Object.entries(snapshot.val()).forEach(([id, p]) => {
+      const vencimiento = new Date(p.fechaVencimiento);
+      if (p.alumnoId === alumnoId && vencimiento > ahora) {
+        if (concepto === 'pago_parcial' && p.faltante > 0) {
+            addOption(id, p);
+        } else if (concepto === 'clases_extra' && p.faltante <= 0) {
+            addOption(id, p);
+        }
+      }
+    });
   }
+}
+
+function addOption(id, p) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = `ID: ${id.slice(-6)} | Faltante: $${p.faltante} | Extra: ${p.clasesExtra || 0}`;
+    pagoIdSelect.appendChild(opt);
+    pagoIdContainer.classList.remove('hidden');
+}
+
+// Registro de Pagos
+registerPagoForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const concepto = conceptoSelect.value;
+  const monto = parseFloat(document.getElementById('monto').value);
+  const faltante = parseFloat(document.getElementById('faltante').value || 0);
+  const alumnoId = pagoAlumnoSelect.value;
+
+  try {
+    const fechaCreacion = new Date();
+    const fechaVencimiento = new Date();
+    fechaVencimiento.setDate(fechaCreacion.getDate() + 30);
+
+    if (concepto === 'mensualidad') {
+      await set(push(ref(db, 'pagos_tipo_a')), { 
+        alumnoId, monto, faltante, concepto, clasesExtra: 0,
+        fechaCreacion: fechaCreacion.toISOString(), 
+        fechaVencimiento: fechaVencimiento.toISOString() 
+      });
+    } 
+    else if (concepto === 'actividad_extra') {
+      await set(push(ref(db, 'pagos_tipo_b')), { 
+          monto, faltante, 
+          observaciones: document.getElementById('observaciones').value, 
+          fecha: fechaCreacion.toISOString() 
+      });
+    }
+    else {
+      const pagoId = pagoIdSelect.value;
+      if (!pagoId) return alert("Seleccione un ID de pago activo");
+      
+      const pagoRef = ref(db, `pagos_tipo_a/${pagoId}`);
+      const snap = await get(pagoRef);
+      const data = snap.val();
+      
+      const nuevasClases = concepto === 'clases_extra' ? parseInt(numClasesExtraInput.value || 0) : 0;
+      
+      await update(pagoRef, {
+        monto: data.monto + monto,
+        faltante: Math.max(0, data.faltante - (concepto === 'pago_parcial' ? monto : 0)),
+        clasesExtra: (data.clasesExtra || 0) + nuevasClases,
+        ultimaModificacion: fechaCreacion.toISOString()
+      });
+    }
+
+    alert('Pago registrado y procesado correctamente ✓');
+    window.app.hideModal('modal-pago');
+    registerPagoForm.reset();
+  } catch (error) {
+    alert("Error: " + error.message);
+  }
+});
+
+// Registro Alumnos
+isAdultToggle.addEventListener('change', () => {
+    tutorSection.classList.toggle('hidden', isAdultToggle.checked);
+});
+
+addStudentForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const alumno = {
+    nombre: document.getElementById('new-name').value.trim(),
+    apellidos: document.getElementById('new-lastname').value.trim(),
+    contacto: document.getElementById('new-contact').value.trim(),
+    esMayor: isAdultToggle.checked,
+    fechaRegistro: new Date().toISOString()
+  };
+  
+  try {
+    await set(push(ref(db, 'alumnos')), alumno);
+    alert('Alumno registrado ✓');
+    window.app.hideModal('modal-alumno');
+    addStudentForm.reset();
+  } catch (e) { alert("Error al guardar"); }
 });
