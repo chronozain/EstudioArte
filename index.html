@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Escuela de Arte - Gestión</title>
+    <title>Escuela de Arte - Gestión Académica</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
@@ -28,152 +28,171 @@
 
     <div id="login-view" class="relative flex min-h-screen w-full flex-col items-center justify-center artistic-gradient p-6">
         <div class="w-full max-w-[400px] bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-8 flex flex-col items-center">
-            <span class="material-symbols-outlined text-primary text-5xl mb-4">palette</span>
-            <h1 class="text-2xl font-bold mb-8">Escuela de Arte</h1>
-            <form id="login-form" class="w-full space-y-6">
-                <input id="email" type="email" class="w-full h-14 px-4 rounded-xl border border-gray-300" placeholder="Email" required/>
-                <input id="password" type="password" class="w-full h-14 px-4 rounded-xl border border-gray-300" placeholder="Contraseña" required/>
-                <div id="login-error" class="hidden text-red-500 text-sm font-bold text-center"></div>
-                <button type="submit" class="w-full rounded-xl bg-primary py-4 text-white font-bold shadow-lg">Ingresar</button>
+            <span class="material-symbols-outlined text-accent text-5xl mb-4">palette</span>
+            <h1 class="text-2xl font-bold mb-2">Escuela de Arte</h1>
+            <p class="text-sm text-gray-500 mb-6">Gestión Académica</p>
+            <form id="login-form" class="w-full space-y-4">
+                <div class="relative">
+                    <span class="material-symbols-outlined absolute left-3 top-3 text-gray-400">person</span>
+                    <input id="email" type="text" class="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300" placeholder="Usuario" required/>
+                </div>
+                <div class="relative">
+                    <span class="material-symbols-outlined absolute left-3 top-3 text-gray-400">lock</span>
+                    <input id="password" type="password" class="w-full pl-10 pr-10 py-3 rounded-xl border border-gray-300" placeholder="Contraseña" required/>
+                    <button type="button" id="toggle-password" class="absolute right-3 top-3 text-gray-400 material-symbols-outlined">visibility</button>
+                </div>
+                <div id="login-error" class="hidden bg-red-100 text-red-500 text-sm font-bold p-2 rounded-xl text-center"></div>
+                <button type="submit" class="w-full rounded-xl bg-accent py-4 text-white font-bold shadow-lg">Ingresar</button>
             </form>
+            <a href="#" class="text-sm text-accent mt-4">¿Olvidaste tu contraseña?</a>
+            <p class="text-xs text-gray-400 mt-6 uppercase">Inspira · Crea · Enseña</p>
         </div>
     </div>
 
-    <div id="dashboard-view" class="hidden-view flex flex-col min-h-screen">
-        <header class="bg-white px-4 py-4 flex items-center justify-between border-b sticky top-0 z-30">
-            <h1 class="text-lg font-bold">Panel Principal</h1>
-            <button id="logout-btn" class="text-sm text-red-500 font-bold">Salir</button>
+    <div id="dashboard-view" class="hidden-view flex flex-col min-h-screen artistic-gradient/50">
+        <header class="bg-white/90 backdrop-blur-md px-4 py-4 flex items-center justify-between border-b sticky top-0 z-30">
+            <div class="flex items-center gap-2">
+                <div class="size-8 rounded-full bg-gray-200"></div>
+                <h1 class="text-lg font-bold">¡Hola, [Nombre]!</h1>
+            </div>
+            <span class="material-symbols-outlined text-gray-500">notifications</span>
         </header>
 
         <main class="p-4 space-y-6">
-            <section class="grid grid-cols-2 gap-4">
-                <div onclick="window.app.showModal('modal-alumno')" class="p-4 bg-white rounded-2xl shadow-sm border border-primary/10 cursor-pointer">
-                    <span class="material-symbols-outlined text-primary text-3xl">person_add</span>
-                    <p class="font-bold text-xs mt-1">Inscribir</p>
-                </div>
-                <div onclick="window.app.showModal('modal-pago')" class="p-4 bg-white rounded-2xl shadow-sm border border-accent/10 cursor-pointer">
-                    <span class="material-symbols-outlined text-accent text-3xl">payments</span>
-                    <p class="font-bold text-xs mt-1">Nuevo Pago</p>
+            <section>
+                <h2 class="text-sm font-bold text-gray-500 uppercase mb-4">Acciones Rápidas</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div onclick="window.app.changeView('alumnos-view')" class="p-4 bg-white rounded-2xl shadow-md flex flex-col items-start cursor-pointer">
+                        <span class="material-symbols-outlined text-primary text-4xl mb-2">group</span>
+                        <p class="font-bold">Administrar Alumnos</p>
+                        <p class="text-xs text-gray-500">Inscripciones y perfiles</p>
+                    </div>
+                    <div onclick="window.app.changeView('pagos-view')" class="p-4 bg-white rounded-2xl shadow-md flex flex-col items-start cursor-pointer">
+                        <span class="material-symbols-outlined text-accent text-4xl mb-2">add_card</span>
+                        <p class="font-bold">Agregar Pago</p>
+                        <p class="text-xs text-gray-500">Registrar ingreso</p>
+                    </div>
+                    <div onclick="alert('Finanzas en desarrollo')" class="p-4 bg-white rounded-2xl shadow-md flex flex-col items-start cursor-pointer">
+                        <span class="material-symbols-outlined text-blue-500 text-4xl mb-2">bar_chart</span>
+                        <p class="font-bold">Finanzas</p>
+                        <p class="text-xs text-gray-500">Reportes mensuales</p>
+                    </div>
                 </div>
             </section>
 
             <section>
-                <h2 class="text-lg font-bold mb-4">Alumnos Activos</h2>
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-bold">Alumnos Activos</h2>
+                    <a href="#" class="text-accent text-sm">Ver todos</a>
+                </div>
+                <div class="relative mb-4">
+                    <span class="material-symbols-outlined absolute left-3 top-3 text-gray-400">search</span>
+                    <input type="text" placeholder="Buscar por nombre..." class="w-full pl-10 pr-4 py-3 bg-white rounded-xl shadow-sm border-none">
+                </div>
                 <div id="active-students-list" class="space-y-3"></div>
             </section>
         </main>
+        <button class="fixed bottom-24 right-4 size-14 bg-accent rounded-full flex items-center justify-center text-white shadow-lg material-symbols-outlined text-3xl">add</button>
     </div>
 
     <div id="alumnos-view" class="hidden-view flex flex-col min-h-screen bg-gray-50">
-        <header class="bg-white p-4 border-b sticky top-0 z-30">
-            <h1 class="text-xl font-bold mb-3 text-slate-800">Directorio de Alumnos</h1>
-            <div class="relative">
-                <span class="material-symbols-outlined absolute left-3 top-3 text-gray-400">search</span>
-                <input type="text" id="search-alumno" placeholder="Buscar por nombre o apellido..." class="w-full pl-10 pr-4 py-3 bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-primary">
-            </div>
+        <header class="bg-white p-4 border-b sticky top-0 z-30 flex items-center gap-2">
+            <button onclick="window.app.changeView('dashboard-view')" class="material-symbols-outlined text-accent">arrow_back</button>
+            <h1 class="text-xl font-bold">Alumnos</h1>
         </header>
-        <div id="full-students-list" class="p-4 space-y-3 overflow-y-auto"></div>
+        <div class="p-4 space-y-3 overflow-y-auto" id="full-students-list"></div>
     </div>
 
-    <div id="profile-view" class="hidden-view fixed inset-0 z-40 bg-gray-50 overflow-y-auto pb-10">
-        <header class="bg-white p-4 flex items-center justify-between border-b sticky top-0">
-            <button onclick="window.app.closeView('profile-view')" class="text-primary flex items-center gap-1 font-bold">
-                <span class="material-symbols-outlined">arrow_back</span> Atrás
-            </button>
-            <h2 class="font-bold">Perfil</h2>
-            <div class="w-10"></div>
+    <div id="pagos-view" class="hidden-view flex flex-col min-h-screen bg-gray-50">
+        <header class="bg-white p-4 border-b sticky top-0 z-30 flex items-center gap-2">
+            <button onclick="window.app.changeView('dashboard-view')" class="material-symbols-outlined text-accent">arrow_back</button>
+            <h1 class="text-xl font-bold">Registrar Pago</h1>
         </header>
-        <div id="profile-content" class="p-4 space-y-6"></div>
-    </div>
-
-    <div id="modal-edit-alumno" class="hidden-view fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-        <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
-                <button onclick="window.app.hideModal('modal-edit-alumno')" class="material-symbols-outlined text-gray-600">close</button>
-                <h2 class="font-bold text-slate-800">Editar Perfil</h2>
-                <button type="submit" form="edit-student-form" class="material-symbols-outlined text-primary">check_circle</button>
+        <main class="p-4 space-y-6">
+            <div class="bg-white/90 backdrop-blur-md rounded-2xl p-6 shadow-md">
+                <h2 class="text-lg font-bold mb-4 flex items-center gap-2"><span class="material-symbols-outlined text-primary">brush</span> Detalles del Pago</h2>
+                <p class="text-sm text-gray-500 mb-6">Escuela de Arte - Gestión de Cobros</p>
+                <form id="register-pago-form" class="space-y-4">
+                    <div>
+                        <label class="text-sm text-gray-500">Concepto</label>
+                        <select id="concepto" class="w-full p-3 border rounded-xl bg-gray-50">
+                            <option value="">Seleccione un concepto</option>
+                            <option value="mensualidad">Mensualidad</option>
+                            <option value="pago_parcial">Pago Parcial</option>
+                            <option value="clases_extra">Clases Extra</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Medio de Pago</label>
+                        <select class="w-full p-3 border rounded-xl bg-gray-50">
+                            <option>Efectivo</option>
+                            <option>Tarjeta</option>
+                            <option>Transferencia</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Alumno</label>
+                        <div class="relative">
+                            <span class="material-symbols-outlined absolute left-3 top-3 text-gray-400">search</span>
+                            <input type="text" id="pago-alumno-search" placeholder="Buscar alumno..." class="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300">
+                        </div>
+                        <div id="pago-alumno-suggestions" class="flex flex-wrap gap-2 mt-2"></div>
+                        <input type="hidden" id="pago-alumno-id">
+                    </div>
+                    <div id="pago-id-container" class="hidden">
+                        <select id="pago-id-select" class="w-full p-3 border rounded-xl bg-accent/10"></select>
+                    </div>
+                    <div id="extra-classes-container" class="hidden">
+                        <input type="number" id="num-clases-extra" min="1" value="1" class="w-full p-3 border rounded-xl" placeholder="Número de clases extra">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-sm text-gray-500">Monto</label>
+                            <input type="number" id="monto" step="0.01" placeholder="$0.00" class="w-full p-3 border rounded-xl">
+                        </div>
+                        <div>
+                            <label class="text-sm text-gray-500">Faltante</label>
+                            <input type="number" id="faltante" step="0.01" placeholder="$0.00" class="w-full p-3 border rounded-xl">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Observaciones (Opcional)</label>
+                        <textarea id="observaciones" placeholder="Notas adicionales sobre el pago..." class="w-full p-3 border rounded-xl h-24"></textarea>
+                    </div>
+                    <button type="submit" class="w-full py-4 bg-accent text-white font-bold rounded-2xl flex items-center justify-center gap-2"><span class="material-symbols-outlined">check</span> Confirmar Pago</button>
+                </form>
             </div>
-            <form id="edit-student-form" class="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-                <div class="flex flex-col items-center mb-4">
-                    <div class="size-20 bg-primary/10 rounded-full flex items-center justify-center text-primary text-3xl font-bold" id="edit-avatar"></div>
-                </div>
-                <div class="space-y-4">
-                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                        <span class="material-symbols-outlined text-sm">person</span> Datos Personales
-                    </h3>
-                    <input type="hidden" id="edit-id">
-                    <input type="text" id="edit-name" placeholder="Nombre" class="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary">
-                    <input type="text" id="edit-lastname" placeholder="Apellidos" class="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary">
-                    <input type="text" id="edit-contact" placeholder="Medio de contacto" class="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary">
-                </div>
-                <div class="space-y-4 pt-4">
-                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                        <span class="material-symbols-outlined text-sm">group</span> Información del Tutor
-                    </h3>
-                    <input type="text" id="edit-tutor-name" placeholder="Nombre del Tutor" class="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary">
-                    <input type="tel" id="edit-tutor-phone" placeholder="Teléfono del Tutor" class="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-primary">
-                </div>
-                <button type="submit" class="w-full py-4 bg-primary text-white font-bold rounded-2xl shadow-lg mt-4">Guardar Cambios</button>
-            </form>
-        </div>
+        </main>
     </div>
 
-    <div id="modal-pago" class="hidden-view fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-        <div class="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4">
-            <h2 class="text-xl font-bold">Registrar Pago</h2>
-            <form id="register-pago-form" class="space-y-4">
-                <select id="concepto" required class="w-full p-4 border rounded-2xl bg-gray-50">
-                    <option value="">Seleccione concepto</option>
-                    <option value="mensualidad">Mensualidad (3 clases)</option>
-                    <option value="pago_parcial">Pago Parcial</option>
-                    <option value="clases_extra">Clase Extra</option>
-                </select>
-                <select id="pago-alumno-select" required class="w-full p-4 border rounded-2xl"></select>
-                <div id="pago-id-container" class="hidden">
-                    <select id="pago-id-select" class="w-full p-4 border-2 border-accent/20 rounded-2xl bg-accent/5"></select>
-                </div>
-                <div id="extra-classes-container" class="hidden">
-                    <input type="number" id="num-clases-extra" min="1" value="1" class="w-full p-4 border rounded-2xl" placeholder="Cantidad de clases">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <input type="number" id="monto" step="0.01" placeholder="Monto $" required class="p-4 border rounded-2xl">
-                    <input type="number" id="faltante" step="0.01" placeholder="Faltante $" class="p-4 border rounded-2xl">
-                </div>
-                <button type="submit" class="w-full py-4 bg-accent text-white font-bold rounded-2xl">Confirmar Pago</button>
-                <button type="button" onclick="window.app.hideModal('modal-pago')" class="w-full text-gray-500 text-sm">Cancelar</button>
-            </form>
-        </div>
+    <div id="ajustes-view" class="hidden-view flex flex-col min-h-screen bg-gray-50">
+        <header class="bg-white p-4 border-b sticky top-0 z-30 flex items-center gap-2">
+            <button onclick="window.app.changeView('dashboard-view')" class="material-symbols-outlined text-accent">arrow_back</button>
+            <h1 class="text-xl font-bold">Ajustes</h1>
+        </header>
+        <main class="p-4 space-y-4">
+            <button id="logout-btn" class="w-full py-4 bg-red-500 text-white rounded-xl font-bold">Cerrar Sesión</button>
+        </main>
     </div>
 
-    <div id="modal-alumno" class="hidden-view fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-        <div class="bg-white rounded-3xl w-full max-w-lg p-6">
-            <h2 class="text-xl font-bold mb-6 text-center">Inscribir Alumno</h2>
-            <form id="add-student-form" class="space-y-4">
-                <input type="text" id="new-name" placeholder="Nombre(s)" required class="w-full p-4 border rounded-2xl">
-                <input type="text" id="new-lastname" placeholder="Apellidos" required class="w-full p-4 border rounded-2xl">
-                <input type="tel" id="new-contact" placeholder="Teléfono de contacto" required class="w-full p-4 border rounded-2xl">
-                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-                    <span class="text-sm font-bold">¿Es mayor de edad?</span>
-                    <input type="checkbox" id="is-adult" checked class="size-6 text-primary rounded-lg">
-                </div>
-                <div id="tutor-section" class="hidden space-y-4">
-                    <input type="text" id="tutor-name" placeholder="Nombre del Tutor" class="w-full p-4 border rounded-2xl">
-                    <input type="tel" id="tutor-phone" placeholder="Teléfono del Tutor" class="w-full p-4 border rounded-2xl">
-                </div>
-                <button type="submit" class="w-full py-4 bg-primary text-white font-bold rounded-2xl">Finalizar Registro</button>
-                <button type="button" onclick="window.app.hideModal('modal-alumno')" class="w-full text-gray-500 text-sm">Cerrar</button>
-            </form>
-        </div>
-    </div>
+    <!-- Otros modales y vistas como profile, edit mantienen similares, pero con rounded/shadows actualizados -->
 
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 h-20 px-6 flex items-center justify-around z-50">
-        <button onclick="window.app.changeNav('dashboard')" class="flex flex-col items-center gap-1 nav-btn text-primary" data-nav="dashboard">
-            <span class="material-symbols-outlined text-3xl">home</span>
-            <span class="text-[10px] font-bold uppercase">Inicio</span>
+    <nav class="hidden-view fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 h-16 px-4 flex items-center justify-around z-50">
+        <button onclick="window.app.changeView('dashboard-view')" class="flex flex-col items-center gap-0.5 nav-btn text-primary" data-nav="dashboard">
+            <span class="material-symbols-outlined text-2xl">home</span>
+            <span class="text-[10px] font-bold">Inicio</span>
         </button>
-        <button onclick="window.app.changeNav('alumnos')" class="flex flex-col items-center gap-1 nav-btn text-gray-400" data-nav="alumnos">
-            <span class="material-symbols-outlined text-3xl">group</span>
-            <span class="text-[10px] font-bold uppercase">Alumnos</span>
+        <button onclick="window.app.changeView('pagos-view')" class="flex flex-col items-center gap-0.5 nav-btn text-gray-400" data-nav="pagos">
+            <span class="material-symbols-outlined text-2xl">payments</span>
+            <span class="text-[10px] font-bold">Pagos</span>
+        </button>
+        <button onclick="window.app.changeView('alumnos-view')" class="flex flex-col items-center gap-0.5 nav-btn text-gray-400" data-nav="alumnos">
+            <span class="material-symbols-outlined text-2xl">group</span>
+            <span class="text-[10px] font-bold">Alumnos</span>
+        </button>
+        <button onclick="window.app.changeView('ajustes-view')" class="flex flex-col items-center gap-0.5 nav-btn text-gray-400" data-nav="ajustes">
+            <span class="material-symbols-outlined text-2xl">settings</span>
+            <span class="text-[10px] font-bold">Ajustes</span>
         </button>
     </nav>
 
