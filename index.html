@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Escuela de Arte - Gestión</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: { "primary": "#135bec", "seafoam": "#a8e6cf", "skyblue": "#dcedc1", "error-text": "#b91c1c" },
+                    fontFamily: { "display": ["Lexend", "sans-serif"] }
+                }
+            }
+        }
+    </script>
+    <style>
+        .artistic-gradient { background: linear-gradient(135deg, #a8e6cf 0%, #dcedc1 50%, #89cff0 100%); }
+        .hidden-view { display: none !important; }
+    </style>
+</head>
+<body class="font-display bg-gray-50 text-slate-800">
+
+    <div id="login-view" class="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden artistic-gradient p-6">
+        <div class="relative z-10 w-full max-w-[400px] bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-8 flex flex-col items-center">
+            <div class="mb-8 flex flex-col items-center">
+                <span class="material-symbols-outlined text-primary text-5xl mb-4">palette</span>
+                <h1 class="text-2xl font-bold">Escuela de Arte</h1>
+            </div>
+            
+            <form id="login-form" class="w-full space-y-6">
+                <div class="flex flex-col gap-2">
+                    <label class="text-sm font-semibold">Usuario (Email)</label>
+                    <input id="email" type="email" class="w-full h-14 px-4 rounded-xl border border-gray-300" placeholder="admin@arte.com" required/>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label class="text-sm font-semibold">Contraseña</label>
+                    <input id="password" type="password" class="w-full h-14 px-4 rounded-xl border border-gray-300" placeholder="••••••••" required/>
+                </div>
+                <div id="login-error" class="hidden text-red-500 text-sm font-bold text-center"></div>
+
+                <button type="submit" class="w-full rounded-xl bg-primary py-4 text-white font-bold shadow-lg hover:opacity-90 transition">
+                    Ingresar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="dashboard-view" class="hidden-view relative flex min-h-screen w-full flex-col pb-24 bg-gray-50">
+        <header class="sticky top-0 z-30 w-full bg-white/80 backdrop-blur px-4 py-4 flex items-center justify-between border-b border-slate-200">
+            <div class="flex items-center gap-3">
+                <div class="size-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">P</div>
+                <div>
+                    <p class="text-[10px] font-medium uppercase text-slate-500">Escuela de Arte</p>
+                    <h1 class="text-lg font-bold">Panel de Control</h1>
+                </div>
+            </div>
+            <button id="logout-btn" class="text-sm text-red-500 font-bold">Salir</button>
+        </header>
+
+        <section class="px-4 pt-6">
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="app.showModal('modal-alumno')" class="col-span-2 flex items-center justify-between p-5 rounded-xl border border-primary/20 bg-white shadow-sm">
+                    <div class="flex items-center gap-4">
+                        <span class="material-symbols-outlined text-primary text-3xl">person_add</span>
+                        <div class="text-left">
+                            <h3 class="font-bold">Nuevo Alumno</h3>
+                            <p class="text-xs text-slate-500">Inscripción</p>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </section>
+
+        <section class="px-4 mt-8">
+            <h2 class="text-lg font-bold mb-4">Alumnos Activos</h2>
+            <div id="students-list" class="space-y-3">
+                <p class="text-center text-gray-500">Cargando alumnos...</p>
+            </div>
+        </section>
+    </div>
+
+    <div id="modal-alumno" class="hidden-view fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md">
+            <h2 class="text-xl font-bold mb-4">Registrar Alumno</h2>
+            <form id="add-student-form" class="space-y-4">
+                <input id="new-name" type="text" placeholder="Nombre completo" class="w-full p-3 border rounded-lg" required>
+                <input id="new-email" type="email" placeholder="Email o Contacto" class="w-full p-3 border rounded-lg">
+                <div class="flex gap-2">
+                    <button type="button" onclick="app.hideModal('modal-alumno')" class="flex-1 p-3 text-gray-500">Cancelar</button>
+                    <button type="submit" class="flex-1 p-3 bg-primary text-white rounded-lg font-bold">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+    <script>
+        // Puente para funciones globales onclick
+        window.app = {
+            showModal: (id) => document.getElementById(id).classList.remove('hidden-view'),
+            hideModal: (id) => document.getElementById(id).classList.add('hidden-view')
+        }
+    </script>
+</body>
+</html>
