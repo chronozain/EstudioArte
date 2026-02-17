@@ -13,19 +13,20 @@
             darkMode: "class",
             theme: {
                 extend: {
-                    colors: { "primary": "#135bec", "seafoam": "#a8e6cf", "skyblue": "#dcedc1", "error-text": "#b91c1c" },
+                    colors: { "primary": "#22c55e", "primary-dark": "#16a34a" },  // verde como en tu captura
                     fontFamily: { "display": ["Lexend", "sans-serif"] }
                 }
             }
         }
     </script>
     <style>
-        .artistic-gradient { background: linear-gradient(135deg, #a8e6cf 0%, #dcedc1 50%, #89cff0 100%); }
+        .artistic-gradient { background: linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%); }
         .hidden-view { display: none !important; }
     </style>
 </head>
-<body class="font-display bg-gray-50 text-slate-800">
+<body class="font-display bg-gray-50 text-slate-800 min-h-screen">
 
+    <!-- Login View -->
     <div id="login-view" class="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden artistic-gradient p-6">
         <div class="relative z-10 w-full max-w-[400px] bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-8 flex flex-col items-center">
             <div class="mb-8 flex flex-col items-center">
@@ -36,7 +37,7 @@
             <form id="login-form" class="w-full space-y-6">
                 <div class="flex flex-col gap-2">
                     <label class="text-sm font-semibold">Usuario (Email)</label>
-                    <input id="email" type="email" class="w-full h-14 px-4 rounded-xl border border-gray-300" placeholder="admin@arte.com" required/>
+                    <input id="email" type="email" class="w-full h-14 px-4 rounded-xl border border-gray-300" placeholder="grazain@hotmail.com" required/>
                 </div>
                 <div class="flex flex-col gap-2">
                     <label class="text-sm font-semibold">Contraseña</label>
@@ -51,29 +52,40 @@
         </div>
     </div>
 
+    <!-- Dashboard View -->
     <div id="dashboard-view" class="hidden-view relative flex min-h-screen w-full flex-col pb-24 bg-gray-50">
-        <header class="sticky top-0 z-30 w-full bg-white/80 backdrop-blur px-4 py-4 flex items-center justify-between border-b border-slate-200">
+        <header class="sticky top-0 z-30 w-full bg-white/90 backdrop-blur px-4 py-4 flex items-center justify-between border-b border-slate-200">
             <div class="flex items-center gap-3">
-                <div class="size-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">P</div>
+                <div class="size-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">E</div>
                 <div>
-                    <p class="text-[10px] font-medium uppercase text-slate-500">Escuela de Arte</p>
-                    <h1 class="text-lg font-bold">Panel de Control</h1>
+                    <p class="text-xs font-medium uppercase text-slate-500">Escuela de Arte</p>
+                    <h1 class="text-lg font-bold">¡Hola, Zain!</h1>
                 </div>
             </div>
             <button id="logout-btn" class="text-sm text-red-500 font-bold">Salir</button>
         </header>
 
         <section class="px-4 pt-6">
-            <div class="grid grid-cols-2 gap-3">
-                <button onclick="app.showModal('modal-alumno')" class="col-span-2 flex items-center justify-between p-5 rounded-xl border border-primary/20 bg-white shadow-sm">
+            <h2 class="text-lg font-bold mb-4">Acciones rápidas</h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="p-5 rounded-2xl bg-white shadow-md border border-primary/10 hover:shadow-lg transition cursor-pointer">
                     <div class="flex items-center gap-4">
-                        <span class="material-symbols-outlined text-primary text-3xl">person_add</span>
-                        <div class="text-left">
-                            <h3 class="font-bold">Nuevo Alumno</h3>
-                            <p class="text-xs text-slate-500">Inscripción</p>
+                        <span class="material-symbols-outlined text-4xl text-primary">group_add</span>
+                        <div>
+                            <h3 class="font-bold">Administrar Alumnos</h3>
+                            <p class="text-sm text-slate-500">Inscripciones y perfiles</p>
                         </div>
                     </div>
-                </button>
+                </div>
+                <div class="p-5 rounded-2xl bg-white shadow-md border border-primary/10 hover:shadow-lg transition cursor-pointer">
+                    <div class="flex items-center gap-4">
+                        <span class="material-symbols-outlined text-4xl text-primary">payments</span>
+                        <div>
+                            <h3 class="font-bold">Agregar Pago</h3>
+                            <p class="text-sm text-slate-500">Registrar ingreso</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -85,27 +97,116 @@
         </section>
     </div>
 
-    <div id="modal-alumno" class="hidden-view fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div class="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h2 class="text-xl font-bold mb-4">Registrar Alumno</h2>
-            <form id="add-student-form" class="space-y-4">
-                <input id="new-name" type="text" placeholder="Nombre completo" class="w-full p-3 border rounded-lg" required>
-                <input id="new-email" type="email" placeholder="Email o Contacto" class="w-full p-3 border rounded-lg">
-                <div class="flex gap-2">
-                    <button type="button" onclick="app.hideModal('modal-alumno')" class="flex-1 p-3 text-gray-500">Cancelar</button>
-                    <button type="submit" class="flex-1 p-3 bg-primary text-white rounded-lg font-bold">Guardar</button>
+    <!-- Modal Alta de Alumno (diseño según tu captura) -->
+    <div id="modal-alumno" class="hidden-view fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div class="bg-gradient-to-b from-green-50 to-white rounded-2xl w-full max-w-lg shadow-2xl">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-green-100">
+                <button type="button" onclick="app.hideModal('modal-alumno')" class="text-green-600 font-medium flex items-center gap-1">
+                    <span class="material-symbols-outlined">arrow_back</span> Cancelar
+                </button>
+                <h2 class="text-lg font-bold text-gray-800">Alta de Alumno</h2>
+                <button type="submit" form="add-student-form" class="text-green-600 font-bold flex items-center gap-1">
+                    Guardar <span class="material-symbols-outlined">check</span>
+                </button>
+            </div>
+
+            <form id="add-student-form" class="p-5 space-y-6">
+                <div>
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="material-symbols-outlined text-green-600">person</span>
+                        <h3 class="text-base font-semibold text-green-800">INFORMACIÓN PERSONAL</h3>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                            <input type="text" id="new-name" required placeholder="Ej. Ana" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Apellidos *</label>
+                            <input type="text" id="new-lastname" required placeholder="Ej. García López" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Contacto (preferentemente teléfono) *</label>
+                            <input type="tel" id="new-contact" required placeholder="+52 667 123 4567 o email@ejemplo.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500">
+                        </div>
+                        <div class="flex items-center justify-between bg-green-50 p-3 rounded-xl">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-green-600">verified</span>
+                                <div>
+                                    <p class="font-medium">Mayor de edad</p>
+                                    <p class="text-xs text-gray-600">El alumno tiene 18 años o más</p>
+                                </div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="is-adult" class="sr-only peer" checked>
+                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-green-600 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                            </label>
+                        </div>
+                    </div>
                 </div>
+
+                <div id="tutor-section" class="hidden">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="material-symbols-outlined text-green-600">group</span>
+                        <h3 class="text-base font-semibold text-green-800">DATOS DEL TUTOR</h3>
+                    </div>
+                    <div class="bg-green-50/50 p-4 rounded-xl border border-green-100">
+                        <p class="text-sm text-green-800 mb-4 italic">Requerido para alumnos menores de edad</p>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Nombre del Tutor *</label>
+                                <input type="text" id="tutor-name" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono del Tutor *</label>
+                                <input type="tel" id="tutor-phone" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full py-4 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
+                    <span class="material-symbols-outlined">person_add</span>
+                    Registrar Alumno
+                </button>
             </form>
         </div>
     </div>
 
+    <!-- Bottom Navigation -->
+    <div class="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg md:hidden">
+        <div class="grid grid-cols-5 items-center h-16 max-w-md mx-auto">
+            <a href="#" class="flex flex-col items-center justify-center text-primary">
+                <span class="material-symbols-outlined text-2xl">home</span>
+                <span class="text-xs font-medium">Inicio</span>
+            </a>
+            <a href="#" class="flex flex-col items-center justify-center text-gray-600">
+                <span class="material-symbols-outlined text-2xl">group</span>
+                <span class="text-xs font-medium">Alumnos</span>
+            </a>
+            <div class="relative -mt-8 flex justify-center">
+                <button onclick="app.showModal('modal-alumno')" class="size-14 rounded-full bg-primary text-white shadow-xl flex items-center justify-center hover:bg-primary-dark transition">
+                    <span class="material-symbols-outlined text-3xl">add</span>
+                </button>
+            </div>
+            <a href="#" class="flex flex-col items-center justify-center text-gray-600">
+                <span class="material-symbols-outlined text-2xl">payments</span>
+                <span class="text-xs font-medium">Pagos</span>
+            </a>
+            <a href="#" class="flex flex-col items-center justify-center text-gray-600">
+                <span class="material-symbols-outlined text-2xl">settings</span>
+                <span class="text-xs font-medium">Ajustes</span>
+            </a>
+        </div>
+    </div>
+    <div class="h-20 md:hidden"></div>
+
     <script type="module" src="js/app.js"></script>
     <script>
-        // Puente para funciones globales onclick
         window.app = {
             showModal: (id) => document.getElementById(id).classList.remove('hidden-view'),
             hideModal: (id) => document.getElementById(id).classList.add('hidden-view')
-        }
+        };
     </script>
 </body>
 </html>
