@@ -1,29 +1,14 @@
 // js/app.js
 
-// ────────────────────────────────────────────────
-// 1. Configuración e inicialización de Firebase
-// ────────────────────────────────────────────────
-// (Opción recomendada: crea un archivo firebase-config.js separado)
-// Pero para simplicidad en GitHub Pages, la ponemos aquí:
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  getDocs,
-  Timestamp,
-} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+import { getDatabase, ref, push, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
 
+// Configuración Firebase (agrega databaseURL)
 const firebaseConfig = {
   apiKey: "AIzaSyCdNroefbfgKJcKT5nR6UAcx1mckosqRM4",
   authDomain: "bd-personal-c3e4d.firebaseapp.com",
+  databaseURL: "https://bd-personal-c3e4d-default-rtdb.firebaseio.com/",  // ← CAMBIA ESTO por tu URL real de RTDB
   projectId: "bd-personal-c3e4d",
   storageBucket: "bd-personal-c3e4d.firebasestorage.app",
   messagingSenderId: "739560517872",
@@ -32,22 +17,29 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db = getDatabase(app);
 
-// ────────────────────────────────────────────────
-// 2. Referencias al DOM
-// ────────────────────────────────────────────────
-const loginView       = document.getElementById('login-view');
-const dashboardView   = document.getElementById('dashboard-view');
-const loginForm       = document.getElementById('login-form');
-const loginError      = document.getElementById('login-error');
-const logoutBtn       = document.getElementById('logout-btn');
-const studentsList    = document.getElementById('students-list');
-const addStudentForm  = document.getElementById('add-student-form');
+// Referencias DOM
+const loginView = document.getElementById('login-view');
+const dashboardView = document.getElementById('dashboard-view');
+const loginForm = document.getElementById('login-form');
+const loginError = document.getElementById('login-error');
+const logoutBtn = document.getElementById('logout-btn');
+const studentsList = document.getElementById('students-list');
+const addStudentForm = document.getElementById('add-student-form');
+const isAdultToggle = document.getElementById('is-adult');
+const tutorSection = document.getElementById('tutor-section');
 
-// ────────────────────────────────────────────────
-// 3. Autenticación y cambio de vistas
-// ────────────────────────────────────────────────
+// Toggle tutor section
+isAdultToggle.addEventListener('change', () => {
+  tutorSection.classList.toggle('hidden', isAdultToggle.checked);
+  if (isAdultToggle.checked) {
+    document.getElementById('tutor-name').value = '';
+    document.getElementById('tutor-phone').value = '';
+  }
+});
+
+// Auth state
 onAuthStateChanged(auth, (user) => {
   if (user) {
     loginView.classList.add('hidden-view');
@@ -59,6 +51,7 @@ onAuthStateChanged(auth, (user) => {
   }
 });
 
+// Login
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = document.getElementById('email').value.trim();
@@ -73,120 +66,87 @@ loginForm.addEventListener('submit', async (e) => {
   }
 });
 
+// Logout
 logoutBtn.addEventListener('click', async () => {
-  try {
-    await signOut(auth);
-  } catch (err) {
-    console.error("Error al cerrar sesión:", err);
-  }
+  await signOut(auth);
 });
 
-// ────────────────────────────────────────────────
-// 4. Lógica de estado del alumno (tu función, conservada)
-// ────────────────────────────────────────────────
-function calculateStatus(paymentDate) {
-  if (!paymentDate) {
-    return { active: false, msg: "Sin pago", classesLeft: 0 };
-  }
-
-  const start = new Date(paymentDate);
-  const now = new Date();
-  const diffTime = Math.abs(now - start);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-  if (diffDays > 30) {
-    return { active: false, msg: "Vencido", classesLeft: 0, isExpired: true };
-  }
-
-  // 3 clases base (en futuro: restar clases consumidas)
-  return {
-    active: true,
-    msg: `${30 - diffDays} días restantes`,
-    classesLeft: 3,
-    isExpired: false
-  };
-}
-
-// ────────────────────────────────────────────────
-// 5. Cargar lista de alumnos
-// ────────────────────────────────────────────────
-async function loadStudents() {
+// Cargar alumnos (Realtime listener)
+function loadStudents() {
+  const alumnosRef = ref(db, 'alumnos');
   studentsList.innerHTML = '<p class="text-center text-gray-500">Cargando alumnos...</p>';
 
-  try {
-    const querySnapshot = await getDocs(collection(db, "alumnos"));
-    studentsList.innerHTML = "";
-
-    if (querySnapshot.empty) {
-      studentsList.innerHTML = '<p class="text-center text-gray-500">No hay alumnos registrados aún.</p>';
+  onValue(alumnosRef, (snapshot) => {
+    studentsList.innerHTML = '';
+    if (!snapshot.exists()) {
+      studentsList.innerHTML = '<p class="text-center text-gray-500 py-8">No hay alumnos registrados.</p>';
       return;
     }
 
-    querySnapshot.forEach((docSnap) => {
-      const student = docSnap.data();
-      const status = calculateStatus(student.lastPaymentDate);
-
+    const alumnos = snapshot.val();
+    Object.entries(alumnos).forEach(([key, student]) => {
       const card = document.createElement('div');
-      card.className = "flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-100";
-
+      card.className = 'bg-white rounded-xl p-4 shadow-sm border border-gray-200 flex items-start gap-4';
       card.innerHTML = `
-        <div class="flex items-center gap-3">
-          <div class="size-11 rounded-lg bg-indigo-100 flex items-center justify-center text-primary font-bold">
-            ${student.name.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <h4 class="font-semibold text-slate-900 text-sm">${student.name}</h4>
-            <p class="text-[11px] text-slate-500">${student.email || 'Sin contacto'}</p>
-          </div>
+        <div class="size-12 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xl">
+          ${student.name.charAt(0).toUpperCase()}
         </div>
-        <div class="text-right">
-          <div class="text-[13px] font-bold text-slate-900">${status.classesLeft} Clases</div>
-          <div class="text-[10px] ${status.isExpired ? 'text-red-500 font-bold' : 'text-slate-400'}">
-            ${status.msg}
-          </div>
+        <div class="flex-1">
+          <h4 class="font-semibold">${student.name} ${student.lastname || ''}</h4>
+          <p class="text-sm text-gray-600">${student.contact}</p>
+          ${student.tutor ? `<p class="text-xs text-gray-500">Tutor: ${student.tutor.name} (${student.tutor.phone})</p>` : ''}
+          <p class="text-xs text-gray-400 mt-1">Registrado: ${new Date(student.createdAt).toLocaleDateString('es-MX')}</p>
         </div>
       `;
-
       studentsList.appendChild(card);
     });
-  } catch (error) {
-    console.error("Error al cargar alumnos:", error);
-    studentsList.innerHTML = '<p class="text-center text-red-500">Error al cargar los datos.</p>';
-  }
+  }, { onlyOnce: false });  // escucha en tiempo real
 }
 
-// ────────────────────────────────────────────────
-// 6. Registrar nuevo alumno
-// ────────────────────────────────────────────────
+// Guardar alumno
 addStudentForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const name = document.getElementById('new-name').value.trim();
-  const email = document.getElementById('new-email').value.trim();
+  const lastname = document.getElementById('new-lastname').value.trim();
+  const contact = document.getElementById('new-contact').value.trim();
+  const isAdult = isAdultToggle.checked;
 
-  if (!name) {
-    alert("El nombre es obligatorio");
+  if (!name || !lastname || !contact) {
+    alert('Nombre, apellidos y contacto son obligatorios.');
     return;
   }
 
-  try {
-    await addDoc(collection(db, "alumnos"), {
-      name,
-      email: email || null,
-      createdAt: Timestamp.now(),
-      lastPaymentDate: Timestamp.now().toDate().toISOString()  // para pruebas
-    });
+  let tutor = null;
+  if (!isAdult) {
+    const tutorName = document.getElementById('tutor-name').value.trim();
+    const tutorPhone = document.getElementById('tutor-phone').value.trim();
+    if (!tutorName || !tutorPhone) {
+      alert('Para menores se requiere nombre y teléfono del tutor.');
+      return;
+    }
+    tutor = { name: tutorName, phone: tutorPhone };
+  }
 
-    window.app.hideModal('modal-alumno');
+  const alumno = {
+    name,
+    lastname,
+    contact,
+    isAdult,
+    tutor,
+    createdAt: new Date().toISOString()
+  };
+
+  try {
+    const newRef = push(ref(db, 'alumnos'));
+    await set(newRef, alumno);
+    app.hideModal('modal-alumno');
     addStudentForm.reset();
-    loadStudents();
-    alert("Alumno registrado correctamente ✓");
+    isAdultToggle.checked = true;
+    tutorSection.classList.add('hidden');
+    alert('Alumno registrado correctamente ✓');
   } catch (error) {
-    console.error("Error al guardar alumno:", error);
-    alert("No se pudo guardar el alumno. Intenta de nuevo.");
+    console.error('Error al guardar:', error);
+    alert('Error al registrar alumno.');
   }
 });
-
-// Opcional: exponer funciones para onclick del HTML si es necesario
-window.app = window.app || {};
-window.app.loadStudents = loadStudents;  // por si quieres refrescar manualmente
