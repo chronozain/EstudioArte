@@ -347,45 +347,49 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
             for(let i=0; i<3; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pRef.key, tomada: false });
         } else if (c === 'clases_extra') {
             const pId = document.getElementById('pago-id-select').value;
-            if (!pId) return alert('Selecciona un ID de pago activo.');
-                
+            if (!pId) {
+                alert('Este alumno no tiene un ID de mensualidad activa y pagada para añadir clases extra.');
+                return; // Detiene la ejecución
+            }
             // Obtenemos el número de clases del input correcto (asegúrate que el ID sea num-clases-extra)
             const num = parseInt(document.getElementById('num-clases-extra').value || '1');
-                
             const pRef = ref(db, `pagos_tipo_a/${pId}`);
-            const pSnap = await get(pRef);
-                
-            if (pSnap.exists()) {
-                const pData = pSnap.val();
-                
-                // 1. Actualizamos el ID de pago (Sumamos monto extra y contador de extras)
-                await update(pRef, { 
-                    monto: (parseFloat(pData.monto) || 0) + monto, 
-                    clasesExtra: (pData.clasesExtra || 0) + num, 
-                    observaciones: (pData.observaciones || '') + `\n[Clase Extra: +${num}] ` + observaciones 
-                });     
-
-                // 2. ACTUALIZACIÓN CRÍTICA: Sumar las clases al perfil del ALUMNO
-                // Esto es lo que hace que se vea el cambio en la pantalla principal
-                const aluRef = ref(db, `alumnos/${alu}`);
-                const aluSnap = await get(aluRef);
-                if (aluSnap.exists()) {
-                    const currentClases = aluSnap.val().clasesDisponibles || 0;
-                    await update(aluRef, { 
-                        clasesDisponibles: currentClases + num 
+            try {
+                    const pSnap = await get(pRef);
+                    if (!pSnap.exists()) throw new Error("El ID de pago no existe");
+            
+                    const pData = pSnap.val();
+            
+                    // 1. Actualizamos el ID de pago sumando el monto y las clases
+                    await update(pRef, { 
+                        monto: (parseFloat(pData.monto) || 0) + monto, 
+                        clasesExtra: (pData.clasesExtra || 0) + num,
+                        observaciones: (pData.observaciones || '') + `\n[+${num} Clases Extra]` 
                     });
-                }       
-
-                // 3. Generamos los registros de asistencia como 'tomada: false'
-                for(let i=0; i < num; i++) {
-                    await push(ref(db, `asistencias/${alu}`), { 
-                        pagoId: pId, 
-                        tomada: false,
-                        tipo: 'extra', // Marcamos que es extra para reportes
-                        fechaRegistro: new Date().toISOString()
-                    });
+                
+                    // 2. Sumamos al contador del ALUMNO (para que se vea en el dashboard)
+                    const aluRef = ref(db, `alumnos/${alu}`);
+                    const aluSnap = await get(aluRef);
+                    if (aluSnap.exists()) {
+                        const disponibles = aluSnap.val().clasesDisponibles || 0;
+                        await update(aluRef, { clasesDisponibles: disponibles + num });
+                    }
+                
+                    // 3. Generamos las asistencias extras
+                    for(let i=0; i<num; i++) {
+                        await push(ref(db, `asistencias/${alu}`), { 
+                            pagoId: pId, 
+                            tomada: false, 
+                            tipo: 'extra' 
+                        });
+                    }
+                    
+                    alert('Clases extra añadidas correctamente ✓');
+                
+                } catch (error) {
+                    console.error("Error en clases extra:", error);
+                    alert("Hubo un error al procesar las clases extra.");
                 }
-            }
         } else if (c === 'pago_parcial') {
             const pId = document.getElementById('pago-id-select').value;
             if (!pId) return alert('Selecciona un ID de pago activo.');
