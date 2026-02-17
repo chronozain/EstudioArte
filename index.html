@@ -32,7 +32,6 @@
 </head>
 <body class="font-display bg-gray-50 text-slate-800 min-h-screen pb-24 md:pb-0">
 
-    <!-- Login View -->
     <div id="login-view" class="relative flex min-h-screen w-full flex-col items-center justify-center overflow-hidden artistic-gradient p-6">
         <div class="relative z-10 w-full max-w-[400px] bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-8 flex flex-col items-center">
             <div class="mb-8 flex flex-col items-center">
@@ -43,29 +42,25 @@
             <form id="login-form" class="w-full space-y-6">
                 <div class="flex flex-col gap-2">
                     <label class="text-sm font-semibold">Usuario (Email)</label>
-                    <input id="email" type="email" class="w-full h-14 px-4 rounded-xl border border-gray-300" placeholder="grazain@hotmail.com" required/>
+                    <input id="email" type="email" class="w-full h-14 px-4 rounded-xl border border-gray-300" placeholder="tu@email.com" required/>
                 </div>
                 <div class="flex flex-col gap-2">
                     <label class="text-sm font-semibold">Contraseña</label>
                     <input id="password" type="password" class="w-full h-14 px-4 rounded-xl border border-gray-300" placeholder="••••••••" required/>
                 </div>
                 <div id="login-error" class="hidden text-red-500 text-sm font-bold text-center"></div>
-
-                <button type="submit" class="w-full rounded-xl bg-primary py-4 text-white font-bold shadow-lg hover:opacity-90 transition">
-                    Ingresar
-                </button>
+                <button type="submit" class="w-full rounded-xl bg-primary py-4 text-white font-bold shadow-lg hover:opacity-90 transition">Ingresar</button>
             </form>
         </div>
     </div>
 
-    <!-- Dashboard View -->
     <div id="dashboard-view" class="hidden-view relative flex min-h-screen w-full flex-col bg-gray-50">
         <header class="sticky top-0 z-30 w-full bg-white/90 backdrop-blur px-4 py-4 flex items-center justify-between border-b border-slate-200">
             <div class="flex items-center gap-3">
                 <div class="size-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">E</div>
                 <div>
                     <p class="text-xs font-medium uppercase text-slate-500">Escuela de Arte</p>
-                    <h1 class="text-lg font-bold">¡Hola, Zain!</h1>
+                    <h1 class="text-lg font-bold">Panel de Gestión</h1>
                 </div>
             </div>
             <button id="logout-btn" class="text-sm text-red-500 font-bold">Salir</button>
@@ -74,21 +69,21 @@
         <section class="px-4 pt-6">
             <h2 class="text-lg font-bold mb-4">Acciones rápidas</h2>
             <div class="grid grid-cols-2 gap-4">
-                <div onclick="app.showModal('modal-alumno')" class="p-5 rounded-2xl bg-white shadow-md border border-primary/10 hover:shadow-lg transition cursor-pointer">
+                <div onclick="window.app.showModal('modal-alumno')" class="p-5 rounded-2xl bg-white shadow-md border border-primary/10 hover:shadow-lg transition cursor-pointer">
                     <div class="flex items-center gap-4">
                         <span class="material-symbols-outlined text-4xl text-primary">group_add</span>
                         <div>
-                            <h3 class="font-bold">Administrar Alumnos</h3>
-                            <p class="text-sm text-slate-500">Inscripciones y perfiles</p>
+                            <h3 class="font-bold text-sm">Alumnos</h3>
+                            <p class="text-xs text-slate-500">Registrar nuevo</p>
                         </div>
                     </div>
                 </div>
-                <div onclick="app.showModal('modal-pago')" class="p-5 rounded-2xl bg-white shadow-md border border-primary/10 hover:shadow-lg transition cursor-pointer">
+                <div onclick="window.app.showModal('modal-pago')" class="p-5 rounded-2xl bg-white shadow-md border border-primary/10 hover:shadow-lg transition cursor-pointer">
                     <div class="flex items-center gap-4">
                         <span class="material-symbols-outlined text-4xl text-primary">payments</span>
                         <div>
-                            <h3 class="font-bold">Agregar Pago</h3>
-                            <p class="text-sm text-slate-500">Registrar ingreso</p>
+                            <h3 class="font-bold text-sm">Pagos</h3>
+                            <p class="text-xs text-slate-500">Registrar ingreso</p>
                         </div>
                     </div>
                 </div>
@@ -97,17 +92,14 @@
 
         <section class="px-4 mt-8">
             <h2 class="text-lg font-bold mb-4">Alumnos Activos</h2>
-            <div id="students-list" class="space-y-3">
-                <p class="text-center text-gray-500">Cargando alumnos...</p>
-            </div>
+            <div id="students-list" class="space-y-3"></div>
         </section>
     </div>
 
-    <!-- Modal Alta de Alumno -->
     <div id="modal-alumno" class="hidden-view fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
         <div class="bg-gradient-to-b from-green-50 to-white rounded-2xl w-full max-w-lg shadow-2xl">
             <div class="flex items-center justify-between px-5 py-4 border-b border-green-100">
-                <button type="button" onclick="app.hideModal('modal-alumno')" class="text-green-600 font-medium flex items-center gap-1">
+                <button type="button" onclick="window.app.hideModal('modal-alumno')" class="text-green-600 font-medium flex items-center gap-1">
                     <span class="material-symbols-outlined">arrow_back</span> Cancelar
                 </button>
                 <h2 class="text-lg font-bold text-gray-800">Alta de Alumno</h2>
@@ -115,177 +107,73 @@
                     Guardar <span class="material-symbols-outlined">check</span>
                 </button>
             </div>
-
-            <form id="add-student-form" class="p-5 space-y-6">
-                <div>
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="material-symbols-outlined text-green-600">person</span>
-                        <h3 class="text-base font-semibold text-green-800">INFORMACIÓN PERSONAL</h3>
-                    </div>
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
-                            <input type="text" id="new-name" required placeholder="Ej. Ana" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Apellidos *</label>
-                            <input type="text" id="new-lastname" required placeholder="Ej. García López" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Contacto (preferentemente teléfono) *</label>
-                            <input type="tel" id="new-contact" required placeholder="+52 667 123 4567 o email@ejemplo.com" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500">
-                        </div>
-                        <div class="flex items-center justify-between bg-green-50 p-3 rounded-xl">
-                            <div class="flex items-center gap-3">
-                                <span class="material-symbols-outlined text-green-600">verified</span>
-                                <div>
-                                    <p class="font-medium">Mayor de edad</p>
-                                    <p class="text-xs text-gray-600">El alumno tiene 18 años o más</p>
-                                </div>
-                            </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="is-adult" class="sr-only peer" checked>
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-green-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
-                        </div>
-                    </div>
+            <form id="add-student-form" class="p-5 space-y-4">
+                <input type="text" id="new-name" required placeholder="Nombre" class="w-full px-4 py-3 border rounded-xl">
+                <input type="text" id="new-lastname" required placeholder="Apellidos" class="w-full px-4 py-3 border rounded-xl">
+                <input type="tel" id="new-contact" required placeholder="Contacto" class="w-full px-4 py-3 border rounded-xl">
+                <div class="flex items-center justify-between bg-green-50 p-3 rounded-xl">
+                    <span class="text-sm font-medium">Mayor de edad</span>
+                    <input type="checkbox" id="is-adult" checked>
                 </div>
-
-                <div id="tutor-section" class="hidden">
-                    <div class="flex items-center gap-2 mb-3">
-                        <span class="material-symbols-outlined text-green-600">group</span>
-                        <h3 class="text-base font-semibold text-green-800">DATOS DEL TUTOR</h3>
-                    </div>
-                    <div class="bg-green-50/50 p-4 rounded-xl border border-green-100">
-                        <p class="text-sm text-green-800 mb-4 italic">Requerido para alumnos menores de edad</p>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Nombre del Tutor *</label>
-                                <input type="text" id="tutor-name" placeholder="Ej. Juan García" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono del Tutor *</label>
-                                <input type="tel" id="tutor-phone" placeholder="+52 667 123 4567" class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500">
-                            </div>
-                        </div>
-                    </div>
+                <div id="tutor-section" class="hidden space-y-4">
+                    <input type="text" id="tutor-name" placeholder="Nombre del Tutor" class="w-full px-4 py-3 border rounded-xl">
+                    <input type="tel" id="tutor-phone" placeholder="Teléfono del Tutor" class="w-full px-4 py-3 border rounded-xl">
                 </div>
-
-                <!-- Botón principal de envío -->
-                <button type="submit" class="w-full py-4 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition flex items-center justify-center gap-2">
-                    <span class="material-symbols-outlined">person_add</span>
-                    Registrar Alumno
-                </button>
+                <button type="submit" class="w-full py-4 bg-green-600 text-white font-bold rounded-xl">Registrar Alumno</button>
             </form>
         </div>
     </div>
 
-    <!-- Modal Registrar Pago (mantenido igual que antes) -->
     <div id="modal-pago" class="hidden-view fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl">
             <div class="flex items-center justify-between px-5 py-4 border-b">
-                <button type="button" onclick="app.hideModal('modal-pago')" class="text-blue-600 font-medium flex items-center gap-1">
+                <button type="button" onclick="window.app.hideModal('modal-pago')" class="text-blue-600 font-medium flex items-center gap-1">
                     <span class="material-symbols-outlined">arrow_back</span> Atrás
                 </button>
                 <h2 class="text-lg font-bold text-gray-800">Registrar Pago</h2>
                 <div class="w-10"></div>
             </div>
-
-            <form id="register-pago-form" class="p-5 space-y-6">
-                <div class="bg-blue-50 p-4 rounded-xl">
-                    <h3 class="text-base font-semibold text-blue-800 flex items-center gap-2">
-                        <span class="material-symbols-outlined">info</span>
-                        Detalles del Pago
-                    </h3>
-                    <p class="text-sm text-gray-600 mt-1">Escuela de Arte - Gestión de Cobros</p>
+            <form id="register-pago-form" class="p-5 space-y-4">
+                <select id="concepto" required class="w-full px-4 py-3 border rounded-xl">
+                    <option value="">Seleccione concepto</option>
+                    <option value="mensualidad">Mensualidad (Tipo A)</option>
+                    <option value="pago_parcial">Pago Parcial (Abono A)</option>
+                    <option value="clases_extra">Clase Extra (Abono A)</option>
+                    <option value="actividad_extra">Actividad Extra (Tipo B)</option>
+                </select>
+                
+                <div id="alumno-pay-container">
+                    <label class="text-xs font-bold text-gray-500 uppercase">Alumno</label>
+                    <select id="pago-alumno-select" class="w-full px-4 py-3 border rounded-xl mb-2"></select>
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Concepto *</label>
-                    <select id="concepto" required class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="">Seleccione un concepto</option>
-                        <option value="mensualidad">Mensualidad</option>
-                        <option value="pago_parcial">Pago Parcial</option>
-                        <option value="clases_extra">Clases extra</option>
-                        <option value="actividad_extra">Actividad extra</option>
-                    </select>
+                <div id="pago-id-container" class="hidden">
+                    <label class="text-xs font-bold text-gray-500 uppercase">ID de Pago Base (Tipo A)</label>
+                    <select id="pago-id-select" class="w-full px-4 py-3 border rounded-xl"></select>
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Medio de Pago *</label>
-                    <select id="medio_pago" required class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="efectivo">Efectivo</option>
-                        <option value="transferencia">Transferencia</option>
-                        <option value="tarjeta">Tarjeta</option>
-                        <option value="otro">Otro</option>
-                    </select>
-                </div>
-
-                <div id="alumno-container" class="hidden">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Alumno *</label>
-                    <input type="text" id="buscar-alumno" placeholder="Buscar alumno..." class="w-full px-4 py-3 border border-gray-300 rounded-xl mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <div id="alumnos-sugeridos" class="max-h-40 overflow-y-auto border border-gray-200 rounded-xl bg-white scrollbar-thin"></div>
-                    <div id="alumno-seleccionado" class="hidden mt-2 p-3 bg-blue-50 rounded-xl flex flex-wrap gap-2"></div>
+                <div id="extra-classes-container" class="hidden">
+                    <label class="text-xs font-bold text-blue-600 uppercase">Cantidad de Clases Extra</label>
+                    <input type="number" id="num-clases-extra" min="1" value="1" class="w-full px-4 py-3 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500">
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Monto *</label>
-                        <input type="number" id="monto" step="0.01" min="0" required class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" value="0.00">
+                        <label class="text-xs font-bold text-gray-500 uppercase">Monto $</label>
+                        <input type="number" id="monto" step="0.01" required class="w-full px-4 py-3 border rounded-xl">
                     </div>
-                    <div id="faltante-container" class="hidden">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Faltante</label>
-                        <input type="number" id="faltante" step="0.01" readonly class="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-100">
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase">Faltante $</label>
+                        <input type="number" id="faltante" step="0.01" class="w-full px-4 py-3 border rounded-xl">
                     </div>
                 </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Observaciones (Opcional)</label>
-                    <textarea id="observaciones" rows="3" placeholder="Notas adicionales sobre el pago..." class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                </div>
-
-                <button type="submit" class="w-full py-4 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 transition flex items-center justify-center gap-2">
-                    <span class="material-symbols-outlined">check</span>
-                    Confirmar Pago
-                </button>
+                
+                <textarea id="observaciones" placeholder="Observaciones" class="w-full px-4 py-3 border rounded-xl"></textarea>
+                <button type="submit" class="w-full py-4 bg-blue-600 text-white font-bold rounded-xl shadow-lg">Confirmar Transacción</button>
             </form>
         </div>
     </div>
 
-    <!-- Bottom Navigation -->
-    <div class="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg md:hidden">
-        <div class="grid grid-cols-5 items-center h-16 max-w-md mx-auto">
-            <a href="#" class="flex flex-col items-center justify-center text-primary">
-                <span class="material-symbols-outlined text-2xl">home</span>
-                <span class="text-xs font-medium">Inicio</span>
-            </a>
-            <a href="#" class="flex flex-col items-center justify-center text-gray-600">
-                <span class="material-symbols-outlined text-2xl">group</span>
-                <span class="text-xs font-medium">Alumnos</span>
-            </a>
-            <div class="relative -mt-8 flex justify-center">
-                <button onclick="app.showModal('modal-alumno')" class="size-14 rounded-full bg-primary text-white shadow-xl flex items-center justify-center hover:bg-primary-dark transition">
-                    <span class="material-symbols-outlined text-3xl">add</span>
-                </button>
-            </div>
-            <a href="#" onclick="app.showModal('modal-pago')" class="flex flex-col items-center justify-center text-gray-600">
-                <span class="material-symbols-outlined text-2xl">payments</span>
-                <span class="text-xs font-medium">Pagos</span>
-            </a>
-            <a href="#" class="flex flex-col items-center justify-center text-gray-600">
-                <span class="material-symbols-outlined text-2xl">settings</span>
-                <span class="text-xs font-medium">Ajustes</span>
-            </a>
-        </div>
-    </div>
-    <div class="h-20 md:hidden"></div>
-
     <script type="module" src="js/app.js"></script>
-    <script>
-        window.app = {
-            showModal: (id) => document.getElementById(id).classList.remove('hidden-view'),
-            hideModal: (id) => document.getElementById(id).classList.add('hidden-view')
-        };
-    </script>
 </body>
 </html>
