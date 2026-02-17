@@ -20,35 +20,23 @@ const db = getDatabase(app);
 window.app = {
     showModal: id => document.getElementById(id)?.classList.remove('hidden-view'),
     hideModal: id => document.getElementById(id)?.classList.add('hidden-view'),
+    closeView: id => document.getElementById(id)?.classList.add('hidden-view'),
     changeView: (view) => {
+        // views con sufijo -view
         ['dashboard-view', 'alumnos-view', 'pagos-view', 'ajustes-view', 'profile-view'].forEach(v => 
             document.getElementById(v)?.classList.add('hidden-view')
         );
-        document.getElementById(view)?.classList.remove('hidden-view');
-        
+        // aceptar tanto 'dashboard' como 'dashboard-view' por compatibilidad
+        const target = document.getElementById(view) || document.getElementById(view + '-view') || document.getElementById(view.replace('-view',''));
+        if (target) target.classList.remove('hidden-view');
+
+        // actualizar nav visual
         document.querySelectorAll('.nav-btn').forEach(b => {
-            b.classList.toggle('text-accent', b.dataset.nav === view.split('-')[0]);
-            b.classList.toggle('text-gray-400', b.dataset.nav !== view.split('-')[0]);
+            const navKey = b.dataset.nav;
+            const activeKey = (view.includes('-') ? view.split('-')[0] : view.replace('-view',''));
+            b.classList.toggle('text-accent', navKey === activeKey);
+            b.classList.toggle('text-gray-400', navKey !== activeKey);
         });
-    },
-    closeView: id => document.getElementById(id)?.classList.add('hidden-view'),
-    editAlumno: async (id) => {
-        const snap = await get(ref(db, `alumnos/${id}`));
-        const s = snap.val();
-        document.getElementById('edit-id').value = id;
-        document.getElementById('edit-name').value = s.nombre;
-        document.getElementById('edit-lastname').value = s.apellidos;
-        document.getElementById('edit-contact').value = s.contacto;
-        document.getElementById('edit-tutor-name').value = s.tutor?.nombre || '';
-        document.getElementById('edit-tutor-phone').value = s.tutor?.telefono || '';
-        document.getElementById('edit-avatar').textContent = s.nombre[0];
-        window.app.showModal('modal-edit-alumno');
-    },
-    checkIn: async (aluId, aid) => {
-        await update(ref(db, `asistencias/${aluId}/${aid}`), { tomada: true, fechaTomada: new Date().toISOString() });
-        alert("Asistencia marcada");
-        window.app.closeView('profile-view');
-        refreshData();
     }
 };
 
@@ -56,12 +44,12 @@ window.app = {
 onAuthStateChanged(auth, user => {
     if (user) {
         document.getElementById('login-view').classList.add('hidden-view');
-        document.querySelector('nav').classList.remove('hidden-view');
+        document.querySelector('nav')?.classList.remove('hidden-view');
         window.app.changeView('dashboard-view');
         refreshData();
     } else {
         document.getElementById('login-view').classList.remove('hidden-view');
-        document.querySelector('nav').classList.add('hidden-view');
+        document.querySelector('nav')?.classList.add('hidden-view');
     }
 });
 
@@ -83,9 +71,10 @@ document.getElementById('logout-btn').addEventListener('click', () => {
 });
 
 // Toggle Password Visibility
-document.getElementById('toggle-password').addEventListener('click', () => {
+document.getElementById('toggle-password')?.addEventListener('click', () => {
     const pass = document.getElementById('password');
     const icon = document.getElementById('toggle-password');
+    if (!pass) return;
     pass.type = pass.type === 'password' ? 'text' : 'password';
     icon.textContent = pass.type === 'password' ? 'visibility' : 'visibility_off';
 });
@@ -93,15 +82,18 @@ document.getElementById('toggle-password').addEventListener('click', () => {
 // --- DATA REFRESH ---
 function refreshData() {
     loadActiveStudents();
-    loadFullStudents('');
-    populateAlumnoSuggestions();
+    loadFullStudents();
+    populateAlumnoSuggestions();   // versión nueva (chips)
+    populateAlumnoSelect();        // compatibilidad con versión antigua (select)
 }
 
 // 1. INICIO: ALUMNOS ACTIVOS (Con Info de Clases y Saldo)
+// incorporamos pagos tipo A y B (tipo_b mostrados en perfil)
 async function loadActiveStudents() {
-    const [aluSnap, pagosSnap, asistSnap] = await Promise.all([
+    const [aluSnap, pagosASnap, pagosBSnap, asistSnap] = await Promise.all([
         get(ref(db, 'alumnos')),
         get(ref(db, 'pagos_tipo_a')),
+        get(ref(db, 'pagos_tipo_b')),
         get(ref(db, 'asistencias'))
     ]);
 
@@ -110,16 +102,19 @@ async function loadActiveStudents() {
     if (!aluSnap.exists()) return;
 
     const hoy = new Date();
-    const pagos = pagosSnap.val() || {};
+    const pagosA = pagosASnap.val() || {};
+    // pagosB no los contamos como mensualidades, solo los listamos en perfil
+    const pagosB = pagosBSnap.val() || {};
     const asistencias = asistSnap.val() || {};
 
     Object.entries(aluSnap.val()).forEach(([id, s]) => {
-        const pagoKey = Object.keys(pagos).find(k => pagos[k].alumnoId === id && new Date(pagos[k].fechaVencimiento) > hoy);
+        const pagoKey = Object.keys(pagosA).find(k => pagosA[k].alumnoId === id && new Date(pagosA[k].fechaVencimiento) > hoy);
         
         if (pagoKey) {
-            const p = pagos[pagoKey];
+            const p = pagosA[pagoKey];
             const aluAsist = asistencias[id] ? Object.values(asistencias[id]).filter(a => a.pagoId === pagoKey) : [];
             const disponibles = aluAsist.filter(a => !a.tomada).length;
+            // saldo y estilo combinado (restaurado desde base)
             const saldoTxt = p.faltante > 0 ? `<span class="text-red-500 font-bold">$${p.faltante}</span>` : `<span class="text-green-600 font-bold">Pagado ✓</span>`;
 
             const card = document.createElement('div');
@@ -127,14 +122,16 @@ async function loadActiveStudents() {
             card.onclick = () => openProfile(id, s, pagoKey, p);
             card.innerHTML = `
                 <div class="flex items-center gap-4">
-                    <div class="size-12 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">${s.nombre[0]}</div>
+                    <div class="size-12 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">${s.nombre[0]}${s.apellidos ? s.apellidos[0] : ''}</div>
                     <div>
-                        <p class="font-bold text-slate-800">${s.nombre} ${s.apellidos}</p>
-                        <p class="text-xs text-gray-500">Clase Ejemplo</p>
-                        <p class="text-xs text-gray-500">Vence: ${new Date(p.fechaVencimiento).toLocaleDateString()}</p>
+                        <p class="font-bold text-slate-800">${s.nombre} ${s.apellidos || ''}</p>
+                        <div class="flex gap-3 text-[10px] uppercase font-bold tracking-tighter mt-1">
+                            <span class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">${disponibles} Clases Disp.</span>
+                            <span class="bg-gray-50 text-gray-500 px-2 py-0.5 rounded-full">Saldo: ${saldoTxt}</span>
+                        </div>
                     </div>
                 </div>
-                <span class="${p.faltante > 0 ? 'text-red-500' : 'text-green-500 bg-green-100 px-2 py-1 rounded-full'} font-bold">$${p.faltante > 0 ? `-${p.faltante}` : 'Pagado'}</span>
+                <span class="material-symbols-outlined text-gray-300">chevron_right</span>
             `;
             container.appendChild(card);
         }
@@ -149,15 +146,18 @@ function loadFullStudents(filter = '') {
         if (!snapshot.exists()) return;
 
         Object.entries(snapshot.val()).forEach(([id, s]) => {
-            if (`${s.nombre} ${s.apellidos}`.toLowerCase().includes(filter.toLowerCase())) {
+            if (`${s.nombre} ${s.apellidos || ''}`.toLowerCase().includes(filter.toLowerCase())) {
                 const div = document.createElement('div');
                 div.className = "bg-white p-4 rounded-2xl flex items-center justify-between border-b border-gray-50";
                 div.innerHTML = `
                     <div class="flex items-center gap-3">
-                        <div class="size-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">${s.nombre[0]}</div>
-                        <div><p class="font-bold text-sm">${s.nombre} ${s.apellidos}</p><p class="text-xs text-gray-400">${s.contacto}</p></div>
+                        <div class="size-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">${s.nombre[0]}${s.apellidos ? s.apellidos[0] : ''}</div>
+                        <div><p class="font-bold text-sm">${s.nombre} ${s.apellidos || ''}</p><p class="text-xs text-gray-400">${s.contacto || ''}</p></div>
                     </div>
-                    <button onclick="window.app.editAlumno('${id}')" class="text-primary material-symbols-outlined">edit_square</button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="window.app.editAlumno('${id}')" class="text-primary material-symbols-outlined">edit_square</button>
+                        <button onclick="window.app.openQuickProfile && window.app.openQuickProfile('${id}')" class="material-symbols-outlined text-gray-400">visibility</button>
+                    </div>
                 `;
                 container.appendChild(div);
             }
@@ -165,9 +165,23 @@ function loadFullStudents(filter = '') {
     });
 }
 
-document.getElementById('search-alumno').addEventListener('input', e => loadFullStudents(e.target.value));
+document.getElementById('search-alumno')?.addEventListener('input', e => loadFullStudents(e.target.value));
 
-// --- FUNCIONES DE MODALES ---
+// --- FUNCIONES DE MODALES / EDICION ---
+window.app.editAlumno = async (id) => {
+    const snap = await get(ref(db, `alumnos/${id}`));
+    const s = snap.val();
+    if (!s) return alert('Alumno no encontrado');
+    document.getElementById('edit-id').value = id;
+    document.getElementById('edit-name').value = s.nombre || '';
+    document.getElementById('edit-lastname').value = s.apellidos || '';
+    document.getElementById('edit-contact').value = s.contacto || '';
+    document.getElementById('edit-tutor-name').value = s.tutor?.nombre || '';
+    document.getElementById('edit-tutor-phone').value = s.tutor?.telefono || '';
+    document.getElementById('edit-avatar').textContent = `${s.nombre[0]}${s.apellidos ? s.apellidos[0] : ''}`;
+    window.app.showModal('modal-edit-alumno');
+};
+
 document.getElementById('edit-student-form').addEventListener('submit', async e => {
     e.preventDefault();
     const id = document.getElementById('edit-id').value;
@@ -188,18 +202,35 @@ document.getElementById('edit-student-form').addEventListener('submit', async e 
 
 // --- PERFIL Y ASISTENCIA (Lógica de la 3ra Clase) ---
 async function openProfile(aluId, s, pKey, pData) {
-    window.app.showModal('profile-view');
+    // Si no llegan s/pKey/pData, los cargamos
+    if (!s) {
+        const snap = await get(ref(db, `alumnos/${aluId}`));
+        s = snap.val();
+    }
+    if (!pKey || !pData) {
+        // buscar pago activo tipo A
+        const pagosSnap = await get(ref(db, 'pagos_tipo_a'));
+        const pagos = pagosSnap.val() || {};
+        const hoy = new Date();
+        pKey = Object.keys(pagos).find(k => pagos[k].alumnoId === aluId && new Date(pagos[k].fechaVencimiento) > hoy);
+        pData = pagos[pKey];
+    }
+
+    window.app.changeView('profile-view');
     const container = document.getElementById('profile-content');
     const asistSnap = await get(ref(db, `asistencias/${aluId}`));
-    const asistencias = asistSnap.exists() ? Object.entries(asistSnap.val()).filter(a => a[1].pagoId === pKey) : [];
+    const asistencias = asistSnap.exists() ? Object.entries(asistSnap.val()).filter(([aid, a]) => a.pagoId === pKey) : [];
+    // obtener pagos tipo B del alumno
+    const pagosBSnap = await get(ref(db, 'pagos_tipo_b'));
+    const pagosB = pagosBSnap.exists() ? Object.entries(pagosBSnap.val()).filter(([k, b]) => b.alumnoId === aluId) : [];
 
     container.innerHTML = `
         <div class="bg-white rounded-3xl p-6 shadow-sm flex flex-col items-center">
-            <div class="size-20 bg-primary/10 rounded-full flex items-center justify-center text-primary text-3xl font-bold mb-4">${s.nombre[0]}</div>
-            <h2 class="text-xl font-bold">${s.nombre} ${s.apellidos}</h2>
-            <p class="text-xs text-gray-500 mb-4">ID: #${pKey.slice(-6)}</p>
+            <div class="size-20 bg-primary/10 rounded-full flex items-center justify-center text-primary text-3xl font-bold mb-4">${s.nombre[0]}${s.apellidos ? s.apellidos[0] : ''}</div>
+            <h2 class="text-xl font-bold">${s.nombre} ${s.apellidos || ''}</h2>
+            <p class="text-xs text-gray-500 mb-4">ID Pago: ${pKey ? '#'+pKey.slice(-6) : '-'}</p>
             <div class="flex gap-4 w-full">
-                <a href="tel:${s.contacto}" class="flex-1 py-3 bg-primary text-white rounded-xl text-center font-bold">Llamar</a>
+                <a href="tel:${s.contacto || '#'}" class="flex-1 py-3 bg-primary text-white rounded-xl text-center font-bold">Llamar</a>
                 <button class="flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold">Mensaje</button>
             </div>
         </div>
@@ -209,7 +240,7 @@ async function openProfile(aluId, s, pKey, pData) {
             <div class="space-y-4">
                 ${asistencias.map(([aid, a], i) => {
                     const esTercera = i === 2;
-                    const bloqueada = esTercera && pData.faltante > 0;
+                    const bloqueada = esTercera && pData && pData.faltante > 0;
                     const statusClass = a.tomada ? 'bg-green-500 text-white' : (bloqueada ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600');
                     return `
                     <div class="flex items-center justify-between border-b border-gray-50 pb-3">
@@ -226,13 +257,47 @@ async function openProfile(aluId, s, pKey, pData) {
                 }).join('')}
             </div>
         </div>
+
+        <div class="bg-white rounded-2xl p-4 shadow-sm">
+            <h3 class="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">Actividades Extra (Tipo B)</h3>
+            ${pagosB.length === 0 ? '<p class="text-sm text-gray-500">No hay actividades extra registradas.</p>' : `
+            <div class="space-y-3">
+                ${pagosB.map(([k, b]) => `
+                    <div class="flex items-center justify-between border-b border-gray-50 pb-3">
+                        <div>
+                            <p class="font-bold text-sm">${b.descripcion || 'Actividad'} - $${b.monto}</p>
+                            <p class="text-[10px] text-gray-400">${b.fecha ? new Date(b.fecha).toLocaleDateString() : ''} ${b.medioPago ? '· ' + b.medioPago : ''}</p>
+                            ${b.observaciones ? `<p class="text-[10px] text-gray-400">Notas: ${b.observaciones}</p>` : ''}
+                        </div>
+                        <div class="text-xs text-gray-500">ID: ${k.slice(-6)}</div>
+                    </div>
+                `).join('')}
+            </div>
+            `}
+        </div>
     `;
 }
+
+// Exponer también una función rápida para abrir perfil desde lista completa
+window.app.openQuickProfile = async (id) => openProfile(id);
+
+// función para marcar asistencia
+window.app.checkIn = async (aluId, aid) => {
+    await update(ref(db, `asistencias/${aluId}/${aid}`), { tomada: true, fechaTomada: new Date().toISOString() });
+    alert("Asistencia marcada");
+    // volver a dashboard/profile (según UI)
+    // cerramos la vista actual y refrescamos datos
+    window.app.changeView('dashboard-view');
+    refreshData();
+};
 
 // --- PAGOS LOGIC ---
 document.getElementById('concepto').addEventListener('change', async (e) => {
     const c = e.target.value;
-    const alu = document.getElementById('pago-alumno-id').value;
+    // compatibilidad: preferimos el input hidden id pago-alumno-id, si no existe se toma valor del select pago-alumno-select
+    const aluInput = document.getElementById('pago-alumno-id');
+    const aluSelect = document.getElementById('pago-alumno-select');
+    const alu = aluInput?.value || (aluSelect?.value || '');
     document.getElementById('pago-id-container').classList.add('hidden');
     document.getElementById('extra-classes-container').classList.add('hidden');
 
@@ -244,7 +309,7 @@ document.getElementById('concepto').addEventListener('change', async (e) => {
             const hoy = new Date();
             Object.entries(snap.val()).forEach(([k, p]) => {
                 if (p.alumnoId === alu && new Date(p.fechaVencimiento) > hoy) {
-                    selId.innerHTML += `<option value="${k}">ID: ${k.slice(-6)} (Adeudo: $${p.faltante})</option>`;
+                    selId.innerHTML += `<option value="${k}">ID: ${k.slice(-6)} (Adeudo: $${p.faltante || 0})</option>`;
                     document.getElementById('pago-id-container').classList.remove('hidden');
                 }
             });
@@ -253,57 +318,81 @@ document.getElementById('concepto').addEventListener('change', async (e) => {
     }
 });
 
+// Al enviar el formulario de pago soportamos: mensualidad, clases_extra, pago_parcial, y actividad_b
 document.getElementById('register-pago-form').addEventListener('submit', async e => {
     e.preventDefault();
     const c = document.getElementById('concepto').value;
-    const alu = document.getElementById('pago-alumno-id').value;
-    const monto = parseFloat(document.getElementById('monto').value);
-    const faltante = parseFloat(document.getElementById('faltante').value || 0);
-    const observaciones = document.getElementById('observaciones').value;
+    const alu = document.getElementById('pago-alumno-id').value || document.getElementById('pago-alumno-select')?.value;
+    if (!alu) return alert('Selecciona un alumno antes de continuar.');
+    const monto = parseFloat(document.getElementById('monto').value || '0');
+    const faltante = parseFloat(document.getElementById('faltante').value || '0');
+    const medio = document.getElementById('medio-pago')?.value || '';
+    const observaciones = document.getElementById('observaciones')?.value || '';
     const fv = new Date(); fv.setDate(fv.getDate() + 30);
 
     try {
         if (c === 'mensualidad') {
             const pRef = push(ref(db, 'pagos_tipo_a'));
-            await set(pRef, { alumnoId: alu, monto, faltante, concepto: c, fechaVencimiento: fv.toISOString(), clasesExtra: 0, observaciones });
+            await set(pRef, { alumnoId: alu, monto, faltante, concepto: c, fechaVencimiento: fv.toISOString(), clasesExtra: 0, medioPago: medio, observaciones });
             for(let i=0; i<3; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pRef.key, tomada: false });
         } else if (c === 'clases_extra') {
             const pId = document.getElementById('pago-id-select').value;
-            const num = parseInt(document.getElementById('num-clases-extra').value);
+            if (!pId) return alert('Selecciona un ID de pago activo.');
+            const num = parseInt(document.getElementById('num-clases-extra').value || '1');
             const pRef = ref(db, `pagos_tipo_a/${pId}`);
             const pData = (await get(pRef)).val();
-            await update(pRef, { monto: pData.monto + monto, clasesExtra: (pData.clasesExtra || 0) + num, observaciones: (pData.observaciones || '') + '\n' + observaciones });
+            await update(pRef, { monto: (pData.monto || 0) + monto, clasesExtra: (pData.clasesExtra || 0) + num, medioPago: medio, observaciones: (pData.observaciones || '') + '\n' + observaciones });
             for(let i=0; i<num; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pId, tomada: false });
         } else if (c === 'pago_parcial') {
             const pId = document.getElementById('pago-id-select').value;
+            if (!pId) return alert('Selecciona un ID de pago activo.');
             const pRef = ref(db, `pagos_tipo_a/${pId}`);
             const pData = (await get(pRef)).val();
-            await update(pRef, { monto: pData.monto + monto, faltante: Math.max(0, pData.faltante - monto), observaciones: (pData.observaciones || '') + '\n' + observaciones });
+            await update(pRef, { monto: (pData.monto || 0) + monto, faltante: Math.max(0, (pData.faltante || 0) - monto), medioPago: medio, observaciones: (pData.observaciones || '') + '\n' + observaciones });
+        } else if (c === 'actividad_b') {
+            // nuevo: pagos tipo B (actividades extra tipo B)
+            // se guardan en 'pagos_tipo_b' y se relacionan por alumnoId
+            const pRef = push(ref(db, 'pagos_tipo_b'));
+            const payload = {
+                alumnoId: alu,
+                monto,
+                concepto: 'actividad_b',
+                fecha: new Date().toISOString(),
+                medioPago: medio,
+                observaciones,
+                descripcion: 'Actividad Extra Tipo B'
+            };
+            await set(pRef, payload);
+        } else {
+            return alert('Concepto no soportado.');
         }
         alert("Pago procesado ✓");
         window.app.changeView('dashboard-view');
         refreshData();
-    } catch (e) { alert(e.message); }
+    } catch (err) {
+        alert(err.message || err);
+    }
 });
 
 // --- HELPER REGISTRO ALUMNO ---
-document.getElementById('is-adult').addEventListener('change', e => document.getElementById('tutor-section').classList.toggle('hidden', e.target.checked));
-document.getElementById('add-student-form').addEventListener('submit', async e => {
+document.getElementById('is-adult')?.addEventListener('change', e => document.getElementById('tutor-section').classList.toggle('hidden', e.target.checked));
+document.getElementById('add-student-form')?.addEventListener('submit', async e => {
     e.preventDefault();
     const s = {
         nombre: document.getElementById('new-name').value,
         apellidos: document.getElementById('new-lastname').value,
         contacto: document.getElementById('new-contact').value,
-        esMayor: document.getElementById('is-adult').checked,
-        tutor: { nombre: document.getElementById('tutor-name').value, telefono: document.getElementById('tutor-phone').value }
+        esMayor: document.getElementById('is-adult')?.checked || false,
+        tutor: { nombre: document.getElementById('tutor-name')?.value || '', telefono: document.getElementById('tutor-phone')?.value || '' }
     };
-    await set(push(ref(db, 'alumnos')), s);
+    const p = push(ref(db, 'alumnos'));
+    await set(p, s);
     alert("Inscripción exitosa");
     window.app.hideModal('modal-alumno');
     refreshData();
 });
 
-// Nueva función para sugerencias en pago
+// Sugerencias para pago (nueva) y select clásico (compatibilidad)
 function populateAlumnoSuggestions() {
     onValue(ref(db, 'alumnos'), snap => {
         const suggestions = document.getElementById('pago-alumno-suggestions');
@@ -312,7 +401,7 @@ function populateAlumnoSuggestions() {
             Object.entries(snap.val()).forEach(([id, s]) => {
                 const chip = document.createElement('button');
                 chip.className = 'bg-gray-100 px-3 py-1 rounded-full text-sm text-gray-700';
-                chip.textContent = `${s.nombre} ${s.apellidos}`;
+                chip.textContent = `${s.nombre} ${s.apellidos || ''}`;
                 chip.onclick = () => {
                     document.getElementById('pago-alumno-search').value = chip.textContent;
                     document.getElementById('pago-alumno-id').value = id;
@@ -322,3 +411,16 @@ function populateAlumnoSuggestions() {
         }
     });
 }
+
+// Compatibilidad: llenar select 'pago-alumno-select' como en la versión base
+function populateAlumnoSelect() {
+    onValue(ref(db, 'alumnos'), snap => {
+        const sel = document.getElementById('pago-alumno-select');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">Seleccione alumno</option>';
+        if (snap.exists()) Object.entries(snap.val()).forEach(([id, s]) => sel.innerHTML += `<option value="${id}">${s.nombre} ${s.apellidos || ''}</option>`);
+    });
+}
+
+// inicializar refresh al cargar el script por si ya hay sesión
+refreshData();
