@@ -3,299 +3,294 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from
 import { getDatabase, ref, push, set, onValue, update, get } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCdNroefbfgKJcKT5nR6UAcx1mckosqRM4",
-  authDomain: "bd-personal-c3e4d.firebaseapp.com",
-  databaseURL: "https://bd-personal-c3e4d-default-rtdb.firebaseio.com",
-  projectId: "bd-personal-c3e4d",
-  storageBucket: "bd-personal-c3e4d.firebasestorage.app",
-  messagingSenderId: "739560517872",
-  appId: "1:739560517872:web:8df36c57591b3220985235"
+    apiKey: "AIzaSyCdNroefbfgKJcKT5nR6UAcx1mckosqRM4",
+    authDomain: "bd-personal-c3e4d.firebaseapp.com",
+    databaseURL: "https://bd-personal-c3e4d-default-rtdb.firebaseio.com",
+    projectId: "bd-personal-c3e4d",
+    storageBucket: "bd-personal-c3e4d.firebasestorage.app",
+    messagingSenderId: "739560517872",
+    appId: "1:739560517872:web:8df36c57591b3220985235"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 
-// --- CONTROLADOR GLOBAL ---
+// --- APP MANAGER ---
 window.app = {
     showModal: id => document.getElementById(id)?.classList.remove('hidden-view'),
     hideModal: id => document.getElementById(id)?.classList.add('hidden-view'),
-    closeProfile: () => {
-        document.getElementById('profile-view').classList.add('hidden-view');
-        document.getElementById('dashboard-view').classList.remove('hidden-view');
+    closeView: id => document.getElementById(id)?.classList.add('hidden-view'),
+    changeNav: (view) => {
+        document.getElementById('dashboard-view').classList.add('hidden-view');
+        document.getElementById('alumnos-view').classList.add('hidden-view');
+        document.getElementById(view + '-view').classList.remove('hidden-view');
+        
+        document.querySelectorAll('.nav-btn').forEach(b => {
+            b.classList.toggle('text-primary', b.dataset.nav === view);
+            b.classList.toggle('text-gray-400', b.dataset.nav !== view);
+        });
     }
 };
 
-// --- AUTENTICACIÓN ---
+// --- AUTH ---
 onAuthStateChanged(auth, user => {
-    const loginView = document.getElementById('login-view');
-    const dashboardView = document.getElementById('dashboard-view');
     if (user) {
-        loginView.classList.add('hidden-view');
-        dashboardView.classList.remove('hidden-view');
-        loadActiveStudents();
-        populateAlumnoSelect();
+        document.getElementById('login-view').classList.add('hidden-view');
+        document.getElementById('dashboard-view').classList.remove('hidden-view');
+        refreshData();
     } else {
-        loginView.classList.remove('hidden-view');
-        dashboardView.classList.add('hidden-view');
+        document.getElementById('login-view').classList.remove('hidden-view');
     }
 });
 
 document.getElementById('login-form').addEventListener('submit', async e => {
     e.preventDefault();
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
-    const errorDiv = document.getElementById('login-error');
     try {
-        await signInWithEmailAndPassword(auth, email, password);
-        errorDiv.classList.add('hidden');
-    } catch (err) {
-        errorDiv.textContent = "Error: Acceso denegado.";
-        errorDiv.classList.remove('hidden');
-    }
+        await signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value);
+    } catch (e) { alert("Error de acceso"); }
 });
 
 document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
 
-// --- DASHBOARD: ALUMNOS ACTIVOS ---
-function loadActiveStudents() {
-    onValue(ref(db, 'alumnos'), async (alumnosSnap) => {
-        const studentsList = document.getElementById('students-list');
-        studentsList.innerHTML = '';
-        if (!alumnosSnap.exists()) return;
+// --- DATA REFRESH ---
+function refreshData() {
+    loadActiveStudents();
+    loadFullStudents();
+    populateAlumnoSelect();
+}
 
-        const pagosSnap = await get(ref(db, 'pagos_tipo_a'));
-        const pagos = pagosSnap.exists() ? pagosSnap.val() : {};
-        const hoy = new Date();
+// 1. INICIO: ALUMNOS ACTIVOS (Con Info de Clases y Saldo)
+async function loadActiveStudents() {
+    const [aluSnap, pagosSnap, asistSnap] = await Promise.all([
+        get(ref(db, 'alumnos')),
+        get(ref(db, 'pagos_tipo_a')),
+        get(ref(db, 'asistencias'))
+    ]);
 
-        Object.entries(alumnosSnap.val()).forEach(([id, student]) => {
-            const pagoActivoKey = Object.keys(pagos).find(key => {
-                const p = pagos[key];
-                return p.alumnoId === id && new Date(p.fechaVencimiento) > hoy;
-            });
+    const container = document.getElementById('active-students-list');
+    container.innerHTML = '';
+    if (!aluSnap.exists()) return;
 
-            if (pagoActivoKey) {
-                const card = document.createElement('div');
-                card.className = "bg-white p-4 rounded-2xl shadow-sm border flex items-center justify-between cursor-pointer hover:bg-green-50 transition";
-                card.onclick = () => openStudentProfile(id, student, pagoActivoKey, pagos[pagoActivoKey]);
-                card.innerHTML = `
-                    <div class="flex items-center gap-4">
-                        <div class="size-12 rounded-full bg-green-100 flex items-center justify-center font-bold text-green-700">${student.nombre[0]}</div>
-                        <div>
-                            <p class="font-bold text-slate-800">${student.nombre} ${student.apellidos}</p>
-                            <p class="text-xs text-gray-500">Vence: ${new Date(pagos[pagoActivoKey].fechaVencimiento).toLocaleDateString()}</p>
+    const hoy = new Date();
+    const pagos = pagosSnap.val() || {};
+    const asistencias = asistSnap.val() || {};
+
+    Object.entries(aluSnap.val()).forEach(([id, s]) => {
+        const pagoKey = Object.keys(pagos).find(k => pagos[k].alumnoId === id && new Date(pagos[k].fechaVencimiento) > hoy);
+        
+        if (pagoKey) {
+            const p = pagos[pagoKey];
+            const aluAsist = asistencias[id] ? Object.values(asistencias[id]).filter(a => a.pagoId === pagoKey) : [];
+            const disponibles = aluAsist.filter(a => !a.tomada).length;
+            const saldoTxt = p.faltante > 0 ? `<span class="text-red-500 font-bold">$${p.faltante}</span>` : `<span class="text-green-600 font-bold">Pagado ✓</span>`;
+
+            const card = document.createElement('div');
+            card.className = "bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer";
+            card.onclick = () => openProfile(id, s, pagoKey, p);
+            card.innerHTML = `
+                <div class="flex items-center gap-4">
+                    <div class="size-12 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">${s.nombre[0]}</div>
+                    <div>
+                        <p class="font-bold text-slate-800">${s.nombre} ${s.apellidos}</p>
+                        <div class="flex gap-3 text-[10px] uppercase font-bold tracking-tighter mt-1">
+                            <span class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">${disponibles} Clases Disp.</span>
+                            <span class="bg-gray-50 text-gray-500 px-2 py-0.5 rounded-full">Saldo: ${saldoTxt}</span>
                         </div>
                     </div>
-                    <span class="material-symbols-outlined text-gray-300">arrow_forward_ios</span>
+                </div>
+                <span class="material-symbols-outlined text-gray-300">chevron_right</span>
+            `;
+            container.appendChild(card);
+        }
+    });
+}
+
+// 2. MODULO ALUMNOS: LISTA COMPLETA Y BUSCADOR
+function loadFullStudents(filter = '') {
+    onValue(ref(db, 'alumnos'), snapshot => {
+        const container = document.getElementById('full-students-list');
+        container.innerHTML = '';
+        if (!snapshot.exists()) return;
+
+        Object.entries(snapshot.val()).forEach(([id, s]) => {
+            if (`${s.nombre} ${s.apellidos}`.toLowerCase().includes(filter.toLowerCase())) {
+                const div = document.createElement('div');
+                div.className = "bg-white p-4 rounded-2xl flex items-center justify-between border-b border-gray-50";
+                div.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="size-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">${s.nombre[0]}</div>
+                        <div><p class="font-bold text-sm">${s.nombre} ${s.apellidos}</p><p class="text-xs text-gray-400">${s.contacto}</p></div>
+                    </div>
+                    <button onclick="window.app.editAlumno('${id}')" class="text-primary material-symbols-outlined">edit_square</button>
                 `;
-                studentsList.appendChild(card);
+                container.appendChild(div);
             }
         });
     });
 }
 
-// --- PERFIL Y ASISTENCIA ---
-async function openStudentProfile(alumnoId, student, pagoId, pagoData) {
+document.getElementById('search-alumno').addEventListener('input', e => loadFullStudents(e.target.value));
+
+// --- FUNCIONES DE MODALES ---
+window.app.editAlumno = async (id) => {
+    const snap = await get(ref(db, `alumnos/${id}`));
+    const s = snap.val();
+    document.getElementById('edit-id').value = id;
+    document.getElementById('edit-name').value = s.nombre;
+    document.getElementById('edit-lastname').value = s.apellidos;
+    document.getElementById('edit-contact').value = s.contacto;
+    document.getElementById('edit-tutor-name').value = s.tutor?.nombre || '';
+    document.getElementById('edit-tutor-phone').value = s.tutor?.telefono || '';
+    document.getElementById('edit-avatar').textContent = s.nombre[0];
+    window.app.showModal('modal-edit-alumno');
+};
+
+document.getElementById('edit-student-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = document.getElementById('edit-id').value;
+    const upd = {
+        nombre: document.getElementById('edit-name').value,
+        apellidos: document.getElementById('edit-lastname').value,
+        contacto: document.getElementById('edit-contact').value,
+        tutor: { 
+            nombre: document.getElementById('edit-tutor-name').value, 
+            telefono: document.getElementById('edit-tutor-phone').value 
+        }
+    };
+    await update(ref(db, `alumnos/${id}`), upd);
+    alert("Cambios guardados");
+    window.app.hideModal('modal-edit-alumno');
+    refreshData();
+});
+
+// --- PERFIL Y ASISTENCIA (Lógica de la 3ra Clase) ---
+async function openProfile(aluId, s, pKey, pData) {
     window.app.showModal('profile-view');
-    const content = document.getElementById('profile-content');
-    content.innerHTML = `<p class="text-center py-20 text-gray-400">Cargando...</p>`;
+    const container = document.getElementById('profile-content');
+    const asistSnap = await get(ref(db, `asistencias/${aluId}`));
+    const asistencias = asistSnap.exists() ? Object.entries(asistSnap.val()).filter(a => a[1].pagoId === pKey) : [];
 
-    // Obtener asistencias del alumno
-    const asistSnap = await get(ref(db, `asistencias/${alumnoId}`));
-    const todasAsistencias = asistSnap.exists() ? Object.entries(asistSnap.val()) : [];
-    
-    // Filtrar por el pagoId actual
-    const clasesActuales = todasAsistencias.filter(([aid, a]) => a.pagoId === pagoId);
-    
-    // Auto-cierre de clases si el pago venció
-    const hoy = new Date();
-    const vencido = new Date(pagoData.fechaVencimiento) < hoy;
-
-    content.innerHTML = `
-        <div class="bg-white rounded-3xl p-8 shadow-sm flex flex-col items-center">
-            <div class="size-24 rounded-full bg-green-100 flex items-center justify-center text-4xl font-bold text-green-700 mb-4">${student.nombre[0]}</div>
-            <h2 class="text-2xl font-bold text-slate-800">${student.nombre} ${student.apellidos}</h2>
-            <p class="text-green-600 font-medium">Socio Activo • ID ${pagoId.slice(-5)}</p>
-            <div class="grid grid-cols-2 gap-4 mt-6 w-full">
-                <a href="tel:${student.contacto}" class="bg-green-500 text-white p-4 rounded-2xl flex items-center justify-center gap-2 font-bold"><span class="material-symbols-outlined">call</span> Llamar</a>
-                <button class="bg-blue-500 text-white p-4 rounded-2xl flex items-center justify-center gap-2 font-bold"><span class="material-symbols-outlined">mail</span> Mensaje</button>
+    container.innerHTML = `
+        <div class="bg-white rounded-3xl p-6 shadow-sm flex flex-col items-center">
+            <div class="size-20 bg-primary/10 rounded-full flex items-center justify-center text-primary text-3xl font-bold mb-4">${s.nombre[0]}</div>
+            <h2 class="text-xl font-bold">${s.nombre} ${s.apellidos}</h2>
+            <p class="text-xs text-gray-500 mb-4">ID: #${pKey.slice(-6)}</p>
+            <div class="flex gap-4 w-full">
+                <a href="tel:${s.contacto}" class="flex-1 py-3 bg-primary text-white rounded-xl text-center font-bold">Llamar</a>
+                <button class="flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold">Mensaje</button>
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl p-6 shadow-sm">
-            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Control de Asistencia</h3>
+        <div class="bg-white rounded-2xl p-4 shadow-sm">
+            <h3 class="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">Control de Asistencia</h3>
             <div class="space-y-4">
-                ${clasesActuales.map(([aid, a], index) => {
-                    const esTercera = index === 2;
-                    const bloqueada = (esTercera && pagoData.faltante > 0);
-                    const btnClass = a.tomada ? 'bg-green-500 text-white' : (bloqueada ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-50 text-blue-600');
-                    const label = a.tomada ? 'Tomada' : (bloqueada ? 'Bloqueada ($)' : 'Marcar');
-                    
+                ${asistencias.map(([aid, a], i) => {
+                    const esTercera = i === 2;
+                    const bloqueada = esTercera && pData.faltante > 0;
+                    const statusClass = a.tomada ? 'bg-green-500 text-white' : (bloqueada ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600');
                     return `
-                    <div class="flex items-center justify-between p-3 border-b border-gray-50">
-                        <div class="flex items-center gap-3">
-                            <div class="text-center bg-gray-50 p-2 rounded-lg min-w-[50px]">
-                                <p class="text-[10px] font-bold text-gray-400 uppercase">Clase</p>
-                                <p class="text-lg font-bold">${index + 1}</p>
-                            </div>
-                            <div>
-                                <p class="font-bold text-sm">${index < 3 ? 'Base' : 'Extra'}</p>
-                                <p class="text-xs text-gray-500">${a.tomada ? new Date(a.fechaTomada).toLocaleDateString() : 'Pendiente'}</p>
-                            </div>
+                    <div class="flex items-center justify-between border-b border-gray-50 pb-3">
+                        <div>
+                            <p class="font-bold text-sm">Clase ${i+1} (${i < 3 ? 'Base' : 'Extra'})</p>
+                            <p class="text-[10px] text-gray-400">${a.tomada ? 'Tomada el: '+new Date(a.fechaTomada).toLocaleDateString() : 'Pendiente'}</p>
                         </div>
                         <button 
-                            ${(!a.tomada && !bloqueada && !vencido) ? `onclick="window.app.marcarAsistencia('${alumnoId}', '${aid}')"` : ''}
-                            class="px-6 py-2 rounded-xl font-bold text-xs ${btnClass}">
-                            ${label}
+                            ${(!a.tomada && !bloqueada) ? `onclick="window.app.checkIn('${aluId}', '${aid}')"` : ''}
+                            class="px-4 py-2 rounded-lg text-xs font-bold ${statusClass}">
+                            ${a.tomada ? 'Tomada ✓' : (bloqueada ? 'Bloqueada ($)' : 'Marcar')}
                         </button>
                     </div>`;
                 }).join('')}
             </div>
         </div>
-
-        <div class="bg-white rounded-2xl p-6 shadow-sm">
-            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Finanzas del Periodo</h3>
-            <div class="flex justify-between items-center py-2">
-                <span class="text-gray-600">Saldo Faltante:</span>
-                <span class="font-bold ${pagoData.faltante > 0 ? 'text-red-500' : 'text-green-500'}">$${pagoData.faltante}</span>
-            </div>
-            <div class="flex justify-between items-center py-2">
-                <span class="text-gray-600">Vencimiento:</span>
-                <span class="font-medium">${new Date(pagoData.fechaVencimiento).toLocaleDateString()}</span>
-            </div>
-        </div>
     `;
 }
 
-window.app.marcarAsistencia = async (alumnoId, asistId) => {
-    try {
-        await update(ref(db, `asistencias/${alumnoId}/${asistId}`), {
-            tomada: true,
-            fechaTomada: new Date().toISOString()
-        });
-        alert("Asistencia registrada ✓");
-        window.app.closeProfile();
-    } catch (e) { alert("Error al registrar"); }
+window.app.checkIn = async (aluId, aid) => {
+    await update(ref(db, `asistencias/${aluId}/${aid}`), { tomada: true, fechaTomada: new Date().toISOString() });
+    alert("Asistencia marcada");
+    window.app.closeView('profile-view');
+    refreshData();
 };
 
-// --- LOGICA DE PAGOS ---
-const conceptoSelect = document.getElementById('concepto');
-conceptoSelect.addEventListener('change', async () => {
-    const val = conceptoSelect.value;
-    const aluId = document.getElementById('pago-alumno-select').value;
-    
+// --- PAGOS LOGIC ---
+document.getElementById('concepto').addEventListener('change', async (e) => {
+    const c = e.target.value;
+    const alu = document.getElementById('pago-alumno-select').value;
     document.getElementById('pago-id-container').classList.add('hidden');
     document.getElementById('extra-classes-container').classList.add('hidden');
 
-    if ((val === 'pago_parcial' || val === 'clases_extra') && aluId) {
+    if ((c === 'pago_parcial' || c === 'clases_extra') && alu) {
         const snap = await get(ref(db, 'pagos_tipo_a'));
-        const selectId = document.getElementById('pago-id-select');
-        selectId.innerHTML = '<option value="">Seleccione ID Base</option>';
-        
+        const selId = document.getElementById('pago-id-select');
+        selId.innerHTML = '<option>Seleccionar ID Activo</option>';
         if (snap.exists()) {
             const hoy = new Date();
-            Object.entries(snap.val()).forEach(([kid, p]) => {
-                if (p.alumnoId === aluId && new Date(p.fechaVencimiento) > hoy) {
-                    const opt = document.createElement('option');
-                    opt.value = kid;
-                    opt.textContent = `ID: ${kid.slice(-6)} (Faltante: $${p.faltante})`;
-                    selectId.appendChild(opt);
+            Object.entries(snap.val()).forEach(([k, p]) => {
+                if (p.alumnoId === alu && new Date(p.fechaVencimiento) > hoy) {
+                    selId.innerHTML += `<option value="${k}">ID: ${k.slice(-6)} (Adeudo: $${p.faltante})</option>`;
                     document.getElementById('pago-id-container').classList.remove('hidden');
                 }
             });
         }
-        if (val === 'clases_extra') document.getElementById('extra-classes-container').classList.remove('hidden');
+        if (c === 'clases_extra') document.getElementById('extra-classes-container').classList.remove('hidden');
     }
 });
 
 document.getElementById('register-pago-form').addEventListener('submit', async e => {
     e.preventDefault();
-    const concepto = conceptoSelect.value;
-    const alumnoId = document.getElementById('pago-alumno-select').value;
+    const c = document.getElementById('concepto').value;
+    const alu = document.getElementById('pago-alumno-select').value;
     const monto = parseFloat(document.getElementById('monto').value);
     const faltante = parseFloat(document.getElementById('faltante').value || 0);
-    const fechaC = new Date();
-    const fechaV = new Date();
-    fechaV.setDate(fechaC.getDate() + 30);
+    const fv = new Date(); fv.setDate(fv.getDate() + 30);
 
     try {
-        if (concepto === 'mensualidad') {
-            const nuevoPagoRef = push(ref(db, 'pagos_tipo_a'));
-            await set(nuevoPagoRef, { 
-                alumnoId, monto, faltante, concepto, clasesExtra: 0,
-                fechaCreacion: fechaC.toISOString(), 
-                fechaVencimiento: fechaV.toISOString() 
-            });
-            // 3 clases base
-            for(let i=0; i<3; i++) {
-                push(ref(db, `asistencias/${alumnoId}`), { pagoId: nuevoPagoRef.key, tomada: false, fechaFin: fechaV.toISOString() });
-            }
-        } 
-        else if (concepto === 'clases_extra') {
+        if (c === 'mensualidad') {
+            const pRef = push(ref(db, 'pagos_tipo_a'));
+            await set(pRef, { alumnoId: alu, monto, faltante, concepto: c, fechaVencimiento: fv.toISOString(), clasesExtra: 0 });
+            for(let i=0; i<3; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pRef.key, tomada: false });
+        } else if (c === 'clases_extra') {
             const pId = document.getElementById('pago-id-select').value;
-            const numE = parseInt(document.getElementById('num-clases-extra').value);
+            const num = parseInt(document.getElementById('num-clases-extra').value);
             const pRef = ref(db, `pagos_tipo_a/${pId}`);
             const pData = (await get(pRef)).val();
-
-            await update(pRef, {
-                monto: pData.monto + monto,
-                clasesExtra: (pData.clasesExtra || 0) + numE
-            });
-            // Añadir asistencias extra
-            for(let i=0; i<numE; i++) {
-                push(ref(db, `asistencias/${alumnoId}`), { pagoId: pId, tomada: false, fechaFin: pData.fechaVencimiento });
-            }
-        }
-        else if (concepto === 'pago_parcial') {
+            await update(pRef, { monto: pData.monto + monto, clasesExtra: (pData.clasesExtra || 0) + num });
+            for(let i=0; i<num; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pId, tomada: false });
+        } else if (c === 'pago_parcial') {
             const pId = document.getElementById('pago-id-select').value;
             const pRef = ref(db, `pagos_tipo_a/${pId}`);
             const pData = (await get(pRef)).val();
-            await update(pRef, {
-                monto: pData.monto + monto,
-                faltante: Math.max(0, pData.faltante - monto)
-            });
+            await update(pRef, { monto: pData.monto + monto, faltante: Math.max(0, pData.faltante - monto) });
         }
-        else if (concepto === 'actividad_extra') {
-            await set(push(ref(db, 'pagos_tipo_b')), { monto, faltante, fecha: fechaC.toISOString(), obs: document.getElementById('observaciones').value });
-        }
-
-        alert("Transacción Exitosa ✓");
+        alert("Pago procesado ✓");
         window.app.hideModal('modal-pago');
-        document.getElementById('register-pago-form').reset();
-    } catch (err) { alert("Error: " + err.message); }
+        refreshData();
+    } catch (e) { alert(e.message); }
 });
 
-// --- REGISTRO DE ALUMNOS ---
-document.getElementById('is-adult').addEventListener('change', e => {
-    document.getElementById('tutor-section').classList.toggle('hidden', e.target.checked);
-});
-
+// --- HELPER REGISTRO ALUMNO ---
+document.getElementById('is-adult').addEventListener('change', e => document.getElementById('tutor-section').classList.toggle('hidden', e.target.checked));
 document.getElementById('add-student-form').addEventListener('submit', async e => {
     e.preventDefault();
-    const alu = {
+    const s = {
         nombre: document.getElementById('new-name').value,
         apellidos: document.getElementById('new-lastname').value,
         contacto: document.getElementById('new-contact').value,
         esMayor: document.getElementById('is-adult').checked,
-        fechaRegistro: new Date().toISOString()
+        tutor: { nombre: document.getElementById('tutor-name').value, telefono: document.getElementById('tutor-phone').value }
     };
-    if (!alu.esMayor) {
-        alu.tutor = { nombre: document.getElementById('tutor-name').value, tel: document.getElementById('tutor-phone').value };
-    }
-    await set(push(ref(db, 'alumnos')), alu);
-    alert("Alumno registrado ✓");
+    await set(push(ref(db, 'alumnos')), s);
+    alert("Inscripción exitosa");
     window.app.hideModal('modal-alumno');
-    document.getElementById('add-student-form').reset();
+    refreshData();
 });
 
 function populateAlumnoSelect() {
     onValue(ref(db, 'alumnos'), snap => {
         const sel = document.getElementById('pago-alumno-select');
         sel.innerHTML = '<option value="">Seleccione alumno</option>';
-        if (snap.exists()) {
-            Object.entries(snap.val()).forEach(([id, s]) => {
-                sel.innerHTML += `<option value="${id}">${s.nombre} ${s.apellidos}</option>`;
-            });
-        }
+        if (snap.exists()) Object.entries(snap.val()).forEach(([id, s]) => sel.innerHTML += `<option value="${id}">${s.nombre} ${s.apellidos}</option>`);
     });
 }
