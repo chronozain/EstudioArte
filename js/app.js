@@ -348,17 +348,56 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
         } else if (c === 'clases_extra') {
             const pId = document.getElementById('pago-id-select').value;
             if (!pId) return alert('Selecciona un ID de pago activo.');
+                
+            // Obtenemos el número de clases del input correcto (asegúrate que el ID sea num-clases-extra)
             const num = parseInt(document.getElementById('num-clases-extra').value || '1');
+                
             const pRef = ref(db, `pagos_tipo_a/${pId}`);
-            const pData = (await get(pRef)).val();
-            await update(pRef, { monto: (pData.monto || 0) + monto, clasesExtra: (pData.clasesExtra || 0) + num, medioPago: medio, observaciones: (pData.observaciones || '') + '\n' + observaciones });
-            for(let i=0; i<num; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pId, tomada: false });
+            const pSnap = await get(pRef);
+                
+            if (pSnap.exists()) {
+                const pData = pSnap.val();
+                
+                // 1. Actualizamos el ID de pago (Sumamos monto extra y contador de extras)
+                await update(pRef, { 
+                    monto: (parseFloat(pData.monto) || 0) + monto, 
+                    clasesExtra: (pData.clasesExtra || 0) + num, 
+                    observaciones: (pData.observaciones || '') + `\n[Clase Extra: +${num}] ` + observaciones 
+                });     
+
+                // 2. ACTUALIZACIÓN CRÍTICA: Sumar las clases al perfil del ALUMNO
+                // Esto es lo que hace que se vea el cambio en la pantalla principal
+                const aluRef = ref(db, `alumnos/${alu}`);
+                const aluSnap = await get(aluRef);
+                if (aluSnap.exists()) {
+                    const currentClases = aluSnap.val().clasesDisponibles || 0;
+                    await update(aluRef, { 
+                        clasesDisponibles: currentClases + num 
+                    });
+                }       
+
+                // 3. Generamos los registros de asistencia como 'tomada: false'
+                for(let i=0; i < num; i++) {
+                    await push(ref(db, `asistencias/${alu}`), { 
+                        pagoId: pId, 
+                        tomada: false,
+                        tipo: 'extra', // Marcamos que es extra para reportes
+                        fechaRegistro: new Date().toISOString()
+                    });
+                }
+            }
         } else if (c === 'pago_parcial') {
             const pId = document.getElementById('pago-id-select').value;
             if (!pId) return alert('Selecciona un ID de pago activo.');
-            const pRef = ref(db, `pagos_tipo_a/${pId}`);
-            const pData = (await get(pRef)).val();
-            await update(pRef, { monto: (pData.monto || 0) + monto, faltante: Math.max(0, (pData.faltante || 0) - monto), medioPago: medio, observaciones: (pData.observaciones || '') + '\n' + observaciones });
+            const pSnap = await get(ref(db, `pagos_tipo_a/${pId}`));
+            if (pSnap.exists()) {
+                const nuevoFaltante = Math.max(0, pSnap.val().faltante - monto);
+                await update(ref(db, `pagos_tipo_a/${pId}`), {
+                    faltante: nuevoFaltante
+                });
+            const abonoRef = push(ref(db, `historial_abonos/${pId}`));
+            await set(abonoRef, { monto, fecha: new Date().toISOString(), medioPago: medio });
+            }
         // Dentro de register-pago-form submit, localiza el bloque else if (c === 'actividad_b')
         } else if (c === 'actividad_b') {
             const pRef = push(ref(db, 'pagos_tipo_b'));
