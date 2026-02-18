@@ -64,7 +64,7 @@
                         class="absolute right-3 top-3 text-gray-400 material-symbols-outlined">visibility</button>
                 </div>
                 <div id="login-error"
-                    class="hidden bg-red-100 text-red-500 text-sm font-bold p-2 rounded-xl text-center"></div>
+                    class="hidden-view bg-red-100 text-red-500 text-sm font-bold p-2 rounded-xl text-center"></div>
                 <button type="submit"
                     class="w-full rounded-xl bg-accent py-4 text-white font-bold shadow-lg">Ingresar</button>
             </form>
@@ -159,11 +159,10 @@
                             <option value="mensualidad">Mensualidad</option>
                             <option value="pago_parcial">Pago Parcial</option>
                             <option value="clases_extra">Clases Extra</option>
-                            <!-- restauramos/añadimos tipo B -->
                             <option value="actividad_b">Actividad Extra (Tipo B)</option>
                         </select>
                     </div>
-                    <div id="plan-clases-container" class="hidden mt-3">
+                    <div id="plan-clases-container" class="hidden-view mt-3">
                         <label class="text-sm text-gray-500">Plan de Clases</label>
                         <select id="plan-clases" class="w-full p-3 border rounded-xl bg-blue-50 border-blue-200">
                             <option value="4">Plan Mensual (4 Clases)</option>
@@ -171,21 +170,19 @@
                         </select>
                     </div>
                     <div id="tipo-b-logic"
-                        class="hidden space-y-4 mt-2 p-4 bg-gray-50 rounded-2xl border border-dashed border-gray-300">
+                        class="hidden-view space-y-4 mt-2 p-4 bg-gray-50 rounded-2xl border border-dashed border-gray-300">
                         <div class="flex items-center gap-3">
                             <input type="checkbox" id="es-abono-b"
                                 class="size-5 rounded text-primary focus:ring-primary">
-                            <label for="es-abono-b" class="text-sm font-bold text-gray-700">¿Es un abono a actividad
-                                existente?</label>
+                            <label for="es-abono-b" class="text-sm font-bold text-gray-700">¿Es un abono a actividad existente?</label>
                         </div>
 
-                        <div id="search-b-container" class="hidden space-y-2">
-                            <label class="text-[10px] uppercase font-bold text-gray-400 ml-1">Buscar ID (Escribe los 5
-                                números)</label>
+                        <div id="search-b-container" class="hidden-view space-y-2">
+                            <label class="text-[10px] uppercase font-bold text-gray-400 ml-1">Buscar ID (Escribe los 5 números)</label>
                             <input type="text" id="search-id-b" placeholder="Ej: 00001" maxlength="5"
                                 class="w-full bg-white border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary">
                             <select id="select-id-b"
-                                class="w-full mt-2 bg-white border-gray-200 rounded-xl p-3 text-sm hidden"></select>
+                                class="w-full mt-2 bg-white border-gray-200 rounded-xl p-3 text-sm hidden-view"></select>
                         </div>
                     </div>
                     <div>
@@ -206,10 +203,10 @@
                         <div id="pago-alumno-suggestions" class="flex flex-wrap gap-2 mt-2"></div>
                         <input type="hidden" id="pago-alumno-id">
                     </div>
-                    <div id="pago-id-container" class="hidden">
+                    <div id="pago-id-container" class="hidden-view">
                         <select id="pago-id-select" class="w-full p-3 border rounded-xl bg-accent/10"></select>
                     </div>
-                    <div id="extra-classes-container" class="hidden">
+                    <div id="extra-classes-container" class="hidden-view">
                         <input type="number" id="num-clases-extra" min="1" value="1"
                             class="w-full p-3 border rounded-xl" placeholder="Número de clases extra">
                     </div>
@@ -251,6 +248,7 @@
                 Sesión</button>
         </main>
     </div>
+
     <div id="finanzas-view" class="hidden-view flex flex-col min-h-screen bg-gray-50 pb-20">
         <header class="bg-white border-b sticky top-0 z-30">
             <div class="p-4 flex items-center justify-between">
@@ -265,12 +263,12 @@
                 <div class="flex-1">
                     <label class="text-[10px] uppercase font-bold text-gray-400 block mb-1 ml-1">Mes</label>
                     <select id="finanzas-mes" class="w-full bg-gray-100 text-slate-800 text-sm font-semibold rounded-xl px-3 py-2 border border-gray-200 outline-none focus:ring-2 focus:ring-accent/20">
-                        </select>
+                    </select>
                 </div>
                 <div class="w-1/3">
                     <label class="text-[10px] uppercase font-bold text-gray-400 block mb-1 ml-1">Año</label>
                     <select id="finanzas-anio" class="w-full bg-gray-100 text-slate-800 text-sm font-semibold rounded-xl px-3 py-2 border border-gray-200 outline-none focus:ring-2 focus:ring-accent/20">
-                        </select>
+                    </select>
                 </div>
             </div>
         </header>
@@ -309,7 +307,7 @@
         </main>
     </div>
 
-    <!-- Perfil (vista completa; se muestra con changeView('profile-view')) -->
+    <!-- Perfil -->
     <div id="profile-view" class="hidden-view fixed inset-0 z-40 bg-gray-50 overflow-y-auto pb-10">
         <header class="bg-white p-4 flex items-center justify-between border-b sticky top-0">
             <button onclick="window.app.changeView('dashboard-view')"
@@ -322,6 +320,7 @@
         <div id="profile-content" class="p-4 space-y-6"></div>
     </div>
 
+    <!-- Modal editar alumno -->
     <div id="modal-edit-alumno" class="hidden-view fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
         <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden">
             <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
@@ -364,6 +363,7 @@
         </div>
     </div>
 
+    <!-- Modal nuevo alumno -->
     <div id="modal-alumno" class="hidden-view fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
         <div class="bg-white rounded-3xl w-full max-w-lg p-6">
             <h2 class="text-xl font-bold mb-6 text-center">Inscribir Alumno</h2>
@@ -377,7 +377,7 @@
                     <span class="text-sm font-bold">¿Es mayor de edad?</span>
                     <input type="checkbox" id="is-adult" checked class="size-6 text-primary rounded-lg">
                 </div>
-                <div id="tutor-section" class="hidden space-y-4">
+                <div id="tutor-section" class="hidden-view space-y-4">
                     <input type="text" id="tutor-name" placeholder="Nombre del Tutor"
                         class="w-full p-4 border rounded-2xl">
                     <input type="tel" id="tutor-phone" placeholder="Teléfono del Tutor"
@@ -392,7 +392,7 @@
     </div>
 
     <nav
-        class="hidden-view fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 h-16 px-4 flex items-center justify-around z-50">
+        class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 h-16 px-4 flex items-center justify-around z-50">
         <button onclick="window.app.changeView('dashboard-view')"
             class="flex flex-col items-center gap-0.5 nav-btn text-primary" data-nav="dashboard">
             <span class="material-symbols-outlined text-2xl">home</span>
