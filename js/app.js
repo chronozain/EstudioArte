@@ -320,44 +320,60 @@ document.getElementById('concepto').addEventListener('change', async (e) => {
     const pIdContainer = document.getElementById('pago-id-container');
     const extraContainer = document.getElementById('extra-classes-container');
     const selId = document.getElementById('pago-id-select');
+
     pIdContainer.classList.add('hidden');
     if(extraContainer) extraContainer.classList.add('hidden');
     selId.innerHTML = '<option value="">Seleccionar ID...</option>';
 
-    // Solo buscamos si hay un alumno seleccionado y el concepto requiere un ID previo
-    if ((concepto === 'pago_parcial' || concepto === 'clases_extra') && aluId) {
-        const snap = await get(ref(db, 'pagos_tipo_a'));
-        
-        if (snap.exists()) {
-            const hoy = new Date();
-            let encontrados = 0;
+    if (!aluId) return;
 
-            Object.entries(snap.val()).forEach(([id, p]) => {
-                const esDelAlumno = p.alumnoId === aluId;
-                const esActivo = new Date(p.fechaVencimiento) > hoy;
-                const faltante = parseFloat(p.faltante || 0);
+    const snap = await get(ref(db, 'pagos_tipo_a'));
+    const hoy = new Date();
+    let pagoActivoEncontrado = null;
 
-                // REGLA: Pago Parcial -> Solo activos con deuda
-                if (concepto === 'pago_parcial' && esDelAlumno && esActivo && faltante > 0) {
-                    selId.innerHTML += `<option value="${id}">ID: ${id.slice(-6)} (Debe: $${faltante})</option>`;
-                    encontrados++;
-                }
-                // REGLA: Clases Extra -> Solo activos SIN deuda (Faltante 0)
-                else if (concepto === 'clases_extra' && esDelAlumno && esActivo && faltante <= 0) {
-                    selId.innerHTML += `<option value="${id}" selected>ID: ${id.slice(-6)} (Pagado ✓)</option>`;
-                    encontrados++;
-                }
-            });
+    if (snap.exists()) {
+        const pagos = snap.val();
+        // Buscamos si existe ALGÚN pago activo para este alumno
+        pagoActivoEncontrado = Object.entries(pagos).find(([id, p]) => 
+            p.alumnoId === aluId && new Date(p.fechaVencimiento) > hoy
+        );
+    }
 
-            if (encontrados > 0) {
-                pIdContainer.classList.remove('hidden');
-                if (concepto === 'clases_extra' && extraContainer) {
-                    extraContainer.classList.remove('hidden');
-                }
-            }
-            // Eliminamos el alert() de aquí para que no moleste al seleccionar al alumno.
-            // La validación solo se hará al dar clic en "Confirmar Pago".
+    // REGLA 1: Si elige MENSUALIDAD y ya hay una activa
+    if (concepto === 'mensualidad' && pagoActivoEncontrado) {
+        alert('Este alumno ya tiene una mensualidad activa. No puedes registrar otra hasta que la actual venza.');
+        e.target.value = ''; // Reseteamos el concepto
+        return;
+    }
+
+    // REGLA 2: Lógica para mostrar IDs en Pago Parcial o Clases Extra
+    if ((concepto === 'pago_parcial' || concepto === 'clases_extra') && pagoActivoEncontrado) {
+        const [id, p] = pagoActivoEncontrado;
+        const faltante = parseFloat(p.faltante || 0);
+
+        // Pago Parcial: Solo si tiene deuda
+        if (concepto === 'pago_parcial' && faltante > 0) {
+            selId.innerHTML = `<option value="${id}" selected>ID: ${id.slice(-6)} (Debe: $${faltante})</option>`;
+            pIdContainer.classList.remove('hidden');
+        } 
+        // Pago Parcial pero NO tiene deuda:
+        else if (concepto === 'pago_parcial' && faltante <= 0) {
+            alert('Este alumno ya liquidó su mensualidad. No hay pagos parciales pendientes.');
+            e.target.value = '';
         }
+        // Clases Extra: Solo si NO tiene deuda
+        else if (concepto === 'clases_extra' && faltante <= 0) {
+            selId.innerHTML = `<option value="${id}" selected>ID: ${id.slice(-6)} (Pagado ✓)</option>`;
+            pIdContainer.classList.remove('hidden');
+            if (extraContainer) extraContainer.classList.remove('hidden');
+        }
+        else if (concepto === 'clases_extra' && faltante > 0) {
+            alert('Debe liquidar el faltante de la mensualidad antes de comprar clases extra.');
+            e.target.value = '';
+        }
+    } else if ((concepto === 'pago_parcial' || concepto === 'clases_extra') && !pagoActivoEncontrado) {
+        alert('No se encontró ninguna mensualidad activa para este alumno.');
+        e.target.value = '';
     }
 });
 
