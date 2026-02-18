@@ -631,10 +631,21 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
             if (!pId) return alert('Selecciona un ID de pago activo.');
             const pRef = ref(db, `pagos_tipo_a/${pId}`);
             const pSnap = await get(pRef);
+
             if (pSnap.exists()) {
-                const nuevoFaltante = Math.max(0, pSnap.val().faltante - monto);
+                const actualFaltante = parseFloat(pSnap.val().faltante || 0);
+                const abono = parseFloat(monto);
+                const nuevoFaltante = Math.max(0, actualFaltante - abono);
+
+                // Actualizamos el faltante en el registro principal del pago
                 await update(pRef, { faltante: nuevoFaltante });
-                await set(push(ref(db, `historial_abonos/${pId}`)), { monto, fecha: new Date().toISOString(), medioPago: medio });
+
+                // Guardamos el registro del abono en el historial
+                await set(push(ref(db, `historial_abonos/${pId}`)), { 
+                    monto: abono, 
+                    fecha: new Date().toISOString(), 
+                    medioPago: medio 
+                });
             }
 
         } else if (c === 'actividad_b') {
