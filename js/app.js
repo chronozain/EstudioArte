@@ -715,24 +715,27 @@ document.getElementById('add-student-form')?.addEventListener('submit', async e 
 });
 
 // Sugerencias para pago (nueva) y select clásico (compatibilidad)
+// Localiza esta parte en tu código:
 function populateAlumnoSuggestions() {
-    onValue(ref(db, 'alumnos'), snap => {
-        const suggestions = document.getElementById('pago-alumno-suggestions');
-        suggestions.innerHTML = '';
-        if (snap.exists()) {
-            Object.entries(snap.val()).forEach(([id, s]) => {
-                const chip = document.createElement('button');
-                chip.className = 'bg-gray-100 px-3 py-1 rounded-full text-sm text-gray-700';
-                chip.textContent = `${s.nombre} ${s.apellidos || ''}`;
-                chip.onclick = () => {
-                    document.getElementById('pago-alumno-search').value = chip.textContent;
-                    document.getElementById('pago-alumno-id').value = id;
-                    document.getElementById('concepto').dispatchEvent(new Event('change'));
-                    document.getElementById('pago-id-container').classList.add('hidden');
-                };
-                suggestions.appendChild(chip);
-            });
-        }
+    // ... lógica de obtención de alumnos ...
+    onValue(ref(db, 'alumnos'), snapshot => {
+        const container = document.getElementById('pago-alumno-suggestions');
+        container.innerHTML = '';
+        
+        Object.entries(snapshot.val()).forEach(([id, s]) => {
+            const btn = document.createElement('button');
+            btn.type = 'button'; // <--- ESTO ES LO QUE FALTA. Evita que el botón envíe el form.
+            btn.className = "px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold";
+            btn.textContent = `${s.nombre} ${s.apellidos || ''}`;
+            btn.onclick = () => {
+                document.getElementById('pago-alumno-search').value = `${s.nombre} ${s.apellidos || ''}`;
+                document.getElementById('pago-alumno-id').value = id;
+                container.innerHTML = ''; // Limpia sugerencias
+                // Opcional: saltar automáticamente al campo de monto
+                document.getElementById('monto').focus();
+            };
+            container.appendChild(btn);
+        });
     });
 }
 
