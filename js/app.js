@@ -590,6 +590,7 @@ document.getElementById('register-pago-form').addEventListener('keydown', functi
 });
 // Al enviar el formulario de pago soportamos: mensualidad, clases_extra, pago_parcial, y actividad_b
 // --- ACTUALIZACIÓN FINAL DEL GUARDADO (SUBMIT) ---
+// --- ACTUALIZACIÓN FINAL DEL GUARDADO (SUBMIT) ---
 document.getElementById('register-pago-form').addEventListener('submit', async e => {
     e.preventDefault();
     const c = document.getElementById('concepto').value;
@@ -607,9 +608,27 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
 
     try {
         if (c === 'mensualidad') {
-            const fv = new Date(); fv.setDate(fv.getDate() + 30);
+            const fv = new Date(); 
+            fv.setDate(fv.getDate() + 30);
+            
+            // Obtener el plan dinámico (4 u 8 clases)
+            const numClasesBase = parseInt(document.getElementById('plan-clases')?.value || '4');
+            
             const pRef = push(ref(db, 'pagos_tipo_a'));
-            await set(pRef, { alumnoId: alu, monto, faltante, concepto: c, fechaCreacion: new Date().toISOString(), fechaVencimiento: fv.toISOString(), clasesExtra: 0, medioPago: medio, observaciones });
+            await set(pRef, { 
+                alumnoId: alu, 
+                monto, 
+                faltante, 
+                concepto: c, 
+                fechaCreacion: new Date().toISOString(), 
+                fechaVencimiento: fv.toISOString(), 
+                clasesBase: numClasesBase,
+                clasesExtra: 0, 
+                medioPago: medio, 
+                observaciones 
+            });
+
+            // Creamos las asistencias según el plan (4 u 8)
             for (let i = 0; i < numClasesBase; i++) {
                 await push(ref(db, `asistencias/${alu}`), { 
                     pagoId: pRef.key, 
@@ -617,7 +636,6 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
                     tipo: 'base' 
                 });
             }
-            alert(`Mensualidad de ${numClasesBase} clases registrada.`);
 
         } else if (c === 'clases_extra') {
             const pId = document.getElementById('pago-id-select').value;
@@ -632,93 +650,53 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
                     clasesExtra: (pSnap.val().clasesExtra || 0) + num,
                     observaciones: (pSnap.val().observaciones || '') + `\n[+${num} Clases Extra]`
                 });
-                for (let i = 0; i < num; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pId, tomada: false, tipo: 'extra' });
-            }
-
-            } else if (c === 'pago_parcial') {
-            // 1. Intentamos obtener el ID del select
-            let pId = document.getElementById('pago-id-select').value;
-
-            // 2. RED DE SEGURIDAD: Si por alguna razón el select está vacío, lo buscamos manualmente
-            if (!pId) {
-                const aluId = document.getElementById('pago-alumno-id').value || document.getElementById('pago-alumno-select')?.value;
-                const snap = await get(ref(db, 'pagos_tipo_a'));
-                const hoy = new Date();
-                const encontrado = Object.entries(snap.val() || {}).find(([id, p]) => 
-                    p.alumnoId === aluId && new Date(p.fechaVencimiento) > hoy
-                );
-                if (encontrado) {
-                    pId = encontrado[0];
+                for (let i = 0; i < num; i++) {
+                    await push(ref(db, `asistencias/${alu}`), { pagoId: pId, tomada: false, tipo: 'extra' });
                 }
             }
 
-            // 3. Si después de la red de seguridad sigue vacío, avisamos
-            if (!pId) return alert('No se pudo encontrar un ID de pago activo para este alumno.');
+        } else if (c === 'pago_parcial') {
+            let pId = document.getElementById('pago-id-select').value;
+            if (!pId) return alert('No se pudo encontrar un ID de pago activo.');
 
             const pRef = ref(db, `pagos_tipo_a/${pId}`);
             const pSnap = await get(pRef);
 
             if (pSnap.exists()) {
                 const actualFaltante = parseFloat(pSnap.val().faltante || 0);
-                const abono = parseFloat(monto);
-                const nuevoFaltante = Math.max(0, actualFaltante - abono);
-
-                // Actualizamos el faltante en el registro principal del pago
+                const nuevoFaltante = Math.max(0, actualFaltante - monto);
                 await update(pRef, { 
                     faltante: nuevoFaltante,
-                    // Agregamos una nota en observaciones para saber que hubo abonos
-                    observaciones: (pSnap.val().observaciones || '') + `\n[Abono: $${abono} - ${new Date().toLocaleDateString()}]`
+                    observaciones: (pSnap.val().observaciones || '') + `\n[Abono: $${monto} - ${new Date().toLocaleDateString()}]`
                 });
-
-                // Guardamos el registro del abono en el historial
-                await set(push(ref(db, `historial_abonos/${pId}`)), { 
-                    monto: abono, 
-                    fecha: new Date().toISOString(), 
-                    medioPago: medio,
-                    alumnoId: pSnap.val().alumnoId // Añadimos el ID del alumno para reportes futuros
-                });
-
-                alert("Abono registrado con éxito");
             }
 
-            } else if (c === 'actividad_b') {
-            const isAbono = document.getElementById('es-abono-b').checked;
-
-            if (isAbono) {
-                // Lógica de Abono a cuenta existente
-                const pId = document.getElementById('select-id-b').value;
-                if (!pId) return alert('Selecciona un Folio de Actividad B.');
-                
-                const pRef = ref(db, `pagos_tipo_b/${pId}`);
-                const pSnap = await get(pRef);
-                if (pSnap.exists()) {
-                    const nuevoFaltante = Math.max(0, parseFloat(pSnap.val().faltante || 0) - monto);
-                    await update(pRef, { 
+        } else if (c === 'actividad_b') {
+            const desc = document.getElementById('desc-b')?.value || 'Actividad Extra';
+            const esAbono = document.getElementById('es-abono-b')?.checked;
+            
+            if (esAbono) {
+                const idB = document.getElementById('select-id-b').value;
+                if (!idB) return alert("Selecciona el folio de la actividad B");
+                const bRef = ref(db, `pagos_tipo_b/${idB}`);
+                const bSnap = await get(bRef);
+                if (bSnap.exists()) {
+                    const nuevoFaltante = Math.max(0, (bSnap.val().faltante || 0) - monto);
+                    await update(bRef, { 
                         faltante: nuevoFaltante,
-                        observaciones: (pSnap.val().observaciones || '') + `\n[Abono: $${monto} - ${new Date().toLocaleDateString()}]`
+                        observaciones: (bSnap.val().observaciones || '') + `\n[Abono: $${monto}]`
                     });
-                    alert("Abono a Actividad B registrado.");
                 }
             } else {
-                // Lógica de Nueva Actividad B
-                const desc = document.getElementById('observaciones').value;
-                if (!desc) return alert('Por favor describe la actividad en Observaciones.');
-                
-                await push(ref(db, 'pagos_tipo_b'), {
-                    monto,
-                    faltante,
-                    descripcion: desc,
-                    fecha: new Date().toISOString(),
-                    fechaCreacion: new Date().toISOString(),
-                    medioPago: medio,
-                    alumnoId: document.getElementById('pago-alumno-id').value || "VENTA_GENERAL"
+                const pBRef = push(ref(db, 'pagos_tipo_b'));
+                await set(pBRef, { 
+                    descripcion: desc, monto, faltante, medioPago: medio, 
+                    observaciones, fecha: new Date().toISOString() 
                 });
-                alert("Nueva Actividad B registrada.");
             }
         }
 
-        // LIMPIEZA FINAL
-        alert("¡Operación Exitosa!");
+        alert("¡Operación Exitosa! ✓");
         resetPagoForm();
         window.app.changeView('dashboard-view');
         refreshData();
@@ -729,15 +707,8 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
     }
 });
 
-        alert("¡Procesado con éxito! ✓");
-        resetPagoForm(); // Esta función ya la actualizamos en el paso anterior
-        window.app.changeView('dashboard-view');
-        refreshData();
-    } catch (err) {
-        console.error(err);
-        alert("Error: " + err.message);
-    }
-});
+// Inicialización al cargar
+refreshData();
 
 // --- HELPER REGISTRO ALUMNO ---
 document.getElementById('is-adult')?.addEventListener('change', e => document.getElementById('tutor-section').classList.toggle('hidden', e.target.checked));
