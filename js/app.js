@@ -23,7 +23,7 @@ window.app = {
     closeView: id => document.getElementById(id)?.classList.add('hidden-view'),
     changeView: (view) => {
         // views con sufijo -view
-        ['dashboard-view', 'alumnos-view', 'pagos-view', 'ajustes-view', 'profile-view'].forEach(v =>
+        ['dashboard-view', 'alumnos-view', 'pagos-view', 'ajustes-view', 'profile-view', 'finanzas-view'].forEach(v => 
             document.getElementById(v)?.classList.add('hidden-view')
         );
         // aceptar tanto 'dashboard' como 'dashboard-view' por compatibilidad
@@ -37,6 +37,15 @@ window.app = {
             b.classList.toggle('text-accent', navKey === activeKey);
             b.classList.toggle('text-gray-400', navKey !== activeKey);
         });
+        if(view === 'finanzas-view') {
+            const mesSel = document.getElementById('finanzas-mes');
+            const anioSel = document.getElementById('finanzas-anio');
+            
+            // Solo cargamos si los selectores ya tienen valores
+            if(mesSel && anioSel && mesSel.value !== "") {
+                cargarFinanzas(mesSel.value, anioSel.value);
+            }
+        }
     }
 };
 
@@ -85,6 +94,7 @@ function refreshData() {
     loadFullStudents();
     populateAlumnoSuggestions();   // versión nueva (chips)
     populateAlumnoSelect();        // compatibilidad con versión antigua (select)
+    initFinanzasFilters();
 }
 
 // 1. INICIO: ALUMNOS ACTIVOS (Con Info de Clases y Saldo)
@@ -345,21 +355,28 @@ async function cargarFinanzas(mes, anio) {
     container.innerHTML = '';
 
     // Procesar Pagos Tipo A (Mensualidades y Clases Extra)
+// ... dentro de cargarFinanzas ...
     if (pagosASnap.exists()) {
         Object.entries(pagosASnap.val()).forEach(([id, p]) => {
-            if (p.cerrado) {
-                const fCierre = new Date(p.fechaCierre);
-                if (fCierre.getMonth() == mes && fCierre.getFullYear() == anio) {
-                    ingresosReales += p.monto;
-                    deudaTotal += (p.faltante || 0);
-                    sumMensualidades += p.monto;
+            const fCierre = p.fechaCierre ? new Date(p.fechaCierre) : null;
+            const fCreacion = new Date(p.fechaCreacion);
 
-                    // Renderizar en lista
-                    renderFinanzaItem(container, `ID: ${id.slice(-6)}`, p.monto, p.faltante, 'Mensualidad', 'event_available');
-                }
+            // 1. Mensualidades CERRADAS
+            if (p.cerrado && fCierre && fCierre.getMonth() == mes && fCierre.getFullYear() == anio) {
+                ingresosReales += p.monto;
+                deudaTotal += (p.faltante || 0);
+                sumMensualidades += p.monto;
+                renderFinanzaItem(container, `ID: ${id.slice(-6)}`, p.monto, p.faltante, 'Mensualidad', 'event_available');
+            }
+
+            // 2. Clases Extra (se cuentan por fecha de creación del pago, o podrías usar la fecha del abono)
+            if (p.clasesExtra > 0 && fCreacion.getMonth() == mes && fCreacion.getFullYear() == anio) {
+                sumClasesExtra += (p.clasesExtra * 100); // Ejemplo: $100 por clase
             }
         });
     }
+    // ... actualizar el resto de los elementos de la UI ...
+    document.getElementById('res-clases-extra').textContent = `$${sumClasesExtra.toFixed(2)}`;
 
     // Procesar Pagos Tipo B (Actividades Extra)
     if (pagosBSnap.exists()) {
@@ -399,6 +416,37 @@ function renderFinanzaItem(container, titulo, monto, deuda, sub, icono) {
         </div>
     `;
     container.appendChild(div);
+}
+// --- INICIALIZADOR DE FILTROS DE FINANZAS ---
+function initFinanzasFilters() {
+    const mesSel = document.getElementById('finanzas-mes');
+    const anioSel = document.getElementById('finanzas-anio');
+    
+    // Si los elementos no existen en el HTML aún, salimos para evitar error
+    if(!mesSel || !anioSel) return;
+
+    // Limpiamos por si acaso
+    mesSel.innerHTML = '';
+    anioSel.innerHTML = '';
+
+    const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    const hoy = new Date();
+
+    meses.forEach((m, i) => {
+        const opt = new Option(m, i);
+        if(i === hoy.getMonth()) opt.selected = true;
+        mesSel.add(opt);
+    });
+
+    for(let a = hoy.getFullYear(); a >= 2024; a--) {
+        const opt = new Option(a, a);
+        anioSel.add(opt);
+    }
+
+    // Escuchar cambios para actualizar la vista automáticamente
+    [mesSel, anioSel].forEach(el => el.addEventListener('change', () => {
+        cargarFinanzas(mesSel.value, anioSel.value);
+    }));
 }
 // Exponer también una función rápida para abrir perfil desde lista completa
 window.app.openQuickProfile = async (id) => openProfile(id);
