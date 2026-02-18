@@ -513,6 +513,7 @@ document.getElementById('concepto').addEventListener('change', async (e) => {
 
         if (concepto === 'pago_parcial' && faltante > 0) {
             selId.innerHTML = `<option value="${id}" selected>ID: ${id.slice(-6)} (Debe: $${faltante})</option>`;
+            selId.value = id;
             pIdContainer.classList.remove('hidden');
         } else if (concepto === 'pago_parcial' && faltante <= 0) {
             alert('Este alumno ya liquidó su mensualidad.');
