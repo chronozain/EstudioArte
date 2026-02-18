@@ -202,22 +202,17 @@ document.getElementById('edit-student-form').addEventListener('submit', async e 
 
 function resetPagoForm() {
     const form = document.getElementById('register-pago-form');
-    if (form) {
-        form.reset(); // Limpia los inputs estándar
-    }
+    if (form) form.reset();
 
-    // Limpieza de campos manuales de búsqueda (CHIPS)
-    const aluIdInput = document.getElementById('pago-alumno-id');
-    const aluSearchInput = document.getElementById('pago-alumno-search');
-    
-    if (aluIdInput) aluIdInput.value = '';
-    if (aluSearchInput) aluSearchInput.value = '';
-    
-    // Ocultar selectores de ID (Pago Parcial / Clases Extra)
+    // Limpieza manual de estados
+    document.getElementById('pago-alumno-id').value = '';
     document.getElementById('pago-id-container')?.classList.add('hidden');
     document.getElementById('extra-classes-container')?.classList.add('hidden');
-
-    // Resetear el selector de IDs de pago
+    document.getElementById('tipo-b-logic')?.classList.add('hidden');
+    document.getElementById('seccion-alumno-pago')?.classList.remove('hidden');
+    document.getElementById('faltante').disabled = false;
+    document.getElementById('select-id-b').classList.add('hidden');
+    
     const selId = document.getElementById('pago-id-select');
     if (selId) selId.innerHTML = '<option value="">Seleccionar ID...</option>';
 }
@@ -314,16 +309,31 @@ window.app.checkIn = async (aluId, aid) => {
 };
 
 // --- PAGOS LOGIC ---
+// --- NUEVA LÓGICA DE CONCEPTOS Y TIPO B ---
 document.getElementById('concepto').addEventListener('change', async (e) => {
     const concepto = e.target.value;
     const aluId = document.getElementById('pago-alumno-id').value;
     const pIdContainer = document.getElementById('pago-id-container');
     const extraContainer = document.getElementById('extra-classes-container');
     const selId = document.getElementById('pago-id-select');
+    
+    // Elementos nuevos para Actividad B
+    const seccionAlumno = document.getElementById('seccion-alumno-pago');
+    const tipoBLogic = document.getElementById('tipo-b-logic');
 
+    // Reset general de vistas
     pIdContainer.classList.add('hidden');
     if(extraContainer) extraContainer.classList.add('hidden');
+    tipoBLogic.classList.add('hidden');
+    seccionAlumno.classList.remove('hidden'); 
     selId.innerHTML = '<option value="">Seleccionar ID...</option>';
+
+    // REGLA: Si es Actividad B, ocultamos la sección del alumno
+    if (concepto === 'actividad_b') {
+        seccionAlumno.classList.add('hidden');
+        tipoBLogic.classList.remove('hidden');
+        return; // Salimos porque no requiere validación de alumno
+    }
 
     if (!aluId) return;
 
@@ -333,148 +343,180 @@ document.getElementById('concepto').addEventListener('change', async (e) => {
 
     if (snap.exists()) {
         const pagos = snap.val();
-        // Buscamos si existe ALGÚN pago activo para este alumno
         pagoActivoEncontrado = Object.entries(pagos).find(([id, p]) => 
             p.alumnoId === aluId && new Date(p.fechaVencimiento) > hoy
         );
     }
 
-    // REGLA 1: Si elige MENSUALIDAD y ya hay una activa
     if (concepto === 'mensualidad' && pagoActivoEncontrado) {
-        alert('Este alumno ya tiene una mensualidad activa. No puedes registrar otra hasta que la actual venza.');
-        e.target.value = ''; // Reseteamos el concepto
+        alert('Este alumno ya tiene una mensualidad activa.');
+        e.target.value = '';
         return;
     }
 
-    // REGLA 2: Lógica para mostrar IDs en Pago Parcial o Clases Extra
     if ((concepto === 'pago_parcial' || concepto === 'clases_extra') && pagoActivoEncontrado) {
         const [id, p] = pagoActivoEncontrado;
         const faltante = parseFloat(p.faltante || 0);
 
-        // Pago Parcial: Solo si tiene deuda
         if (concepto === 'pago_parcial' && faltante > 0) {
             selId.innerHTML = `<option value="${id}" selected>ID: ${id.slice(-6)} (Debe: $${faltante})</option>`;
             pIdContainer.classList.remove('hidden');
-        } 
-        // Pago Parcial pero NO tiene deuda:
-        else if (concepto === 'pago_parcial' && faltante <= 0) {
-            alert('Este alumno ya liquidó su mensualidad. No hay pagos parciales pendientes.');
+        } else if (concepto === 'pago_parcial' && faltante <= 0) {
+            alert('Este alumno ya liquidó su mensualidad.');
             e.target.value = '';
-        }
-        // Clases Extra: Solo si NO tiene deuda
-        else if (concepto === 'clases_extra' && faltante <= 0) {
+        } else if (concepto === 'clases_extra' && faltante <= 0) {
             selId.innerHTML = `<option value="${id}" selected>ID: ${id.slice(-6)} (Pagado ✓)</option>`;
             pIdContainer.classList.remove('hidden');
             if (extraContainer) extraContainer.classList.remove('hidden');
-        }
-        else if (concepto === 'clases_extra' && faltante > 0) {
-            alert('Debe liquidar el faltante de la mensualidad antes de comprar clases extra.');
+        } else if (concepto === 'clases_extra' && faltante > 0) {
+            alert('Debe liquidar el faltante antes de añadir clases extra.');
             e.target.value = '';
         }
     } else if ((concepto === 'pago_parcial' || concepto === 'clases_extra') && !pagoActivoEncontrado) {
-        alert('No se encontró ninguna mensualidad activa para este alumno.');
+        alert('No se encontró mensualidad activa.');
         e.target.value = '';
     }
 });
 
+// Lógica para el checkbox de Abono Tipo B
+document.getElementById('es-abono-b')?.addEventListener('change', (e) => {
+    const isAbono = e.target.checked;
+    const searchCont = document.getElementById('search-b-container');
+    const faltanteInput = document.getElementById('faltante');
+    
+    if (isAbono) {
+        searchCont.classList.remove('hidden');
+        faltanteInput.value = '0';
+        faltanteInput.disabled = true; // Bloqueado por regla 3
+    } else {
+        searchCont.classList.add('hidden');
+        faltanteInput.disabled = false;
+        faltanteInput.value = '';
+    }
+});
+
+// Buscador de Folios ACT-EXT
+document.getElementById('search-id-b')?.addEventListener('input', async (e) => {
+    const val = e.target.value;
+    if (val.length === 5) {
+        const snap = await get(ref(db, 'pagos_tipo_b'));
+        const select = document.getElementById('select-id-b');
+        select.innerHTML = '<option value="">Selecciona el ID...</option>';
+        
+        if (snap.exists()) {
+            const found = Object.entries(snap.val()).filter(([id, data]) => 
+                id.includes(val) && parseFloat(data.faltante || 0) > 0
+            );
+            
+            if (found.length > 0) {
+                select.classList.remove('hidden');
+                found.forEach(([id, data]) => {
+                    select.innerHTML += `<option value="${id}">${id} (Debe: $${data.faltante})</option>`;
+                });
+            } else {
+                alert("No se encontró el folio o ya no tiene deuda.");
+            }
+        }
+    }
+});
+
 // Al enviar el formulario de pago soportamos: mensualidad, clases_extra, pago_parcial, y actividad_b
+// --- ACTUALIZACIÓN FINAL DEL GUARDADO (SUBMIT) ---
 document.getElementById('register-pago-form').addEventListener('submit', async e => {
     e.preventDefault();
     const c = document.getElementById('concepto').value;
-    const alu = document.getElementById('pago-alumno-id').value || document.getElementById('pago-alumno-select')?.value;
-    if (!alu) return alert('Selecciona un alumno antes de continuar.');
     const monto = parseFloat(document.getElementById('monto').value || '0');
     const faltante = parseFloat(document.getElementById('faltante').value || '0');
     const medio = document.getElementById('medio-pago')?.value || '';
     const observaciones = document.getElementById('observaciones')?.value || '';
-    const fv = new Date(); fv.setDate(fv.getDate() + 30);
+    
+    // REGLA: Si no es Actividad B, validamos que exista un Alumno seleccionado
+    let alu = null;
+    if (c !== 'actividad_b') {
+        alu = document.getElementById('pago-alumno-id').value || document.getElementById('pago-alumno-select')?.value;
+        if (!alu) return alert('Selecciona un alumno antes de continuar.');
+    }
 
     try {
         if (c === 'mensualidad') {
+            const fv = new Date(); fv.setDate(fv.getDate() + 30);
             const pRef = push(ref(db, 'pagos_tipo_a'));
-            await set(pRef, { alumnoId: alu, monto, faltante, concepto: c,fechaCreacion: new Date().toISOString(), fechaVencimiento: fv.toISOString(), clasesExtra: 0, medioPago: medio, observaciones });
+            await set(pRef, { alumnoId: alu, monto, faltante, concepto: c, fechaCreacion: new Date().toISOString(), fechaVencimiento: fv.toISOString(), clasesExtra: 0, medioPago: medio, observaciones });
             for(let i=0; i<3; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pRef.key, tomada: false });
+
         } else if (c === 'clases_extra') {
             const pId = document.getElementById('pago-id-select').value;
-            if (!pId) {
-                alert('Este alumno no tiene un ID de mensualidad activa y pagada para añadir clases extra.');
-                return; // Detiene la ejecución
-            }
-            // Obtenemos el número de clases del input correcto (asegúrate que el ID sea num-clases-extra)
+            if (!pId) return alert('Selecciona un ID de mensualidad activa.');
             const num = parseInt(document.getElementById('num-clases-extra').value || '1');
             const pRef = ref(db, `pagos_tipo_a/${pId}`);
-            try {
-                    const pSnap = await get(pRef);
-                    if (!pSnap.exists()) throw new Error("El ID de pago no existe");
+            const pSnap = await get(pRef);
             
-                    const pData = pSnap.val();
-            
-                    // 1. Actualizamos el ID de pago sumando el monto y las clases
-                    await update(pRef, { 
-                        monto: (parseFloat(pData.monto) || 0) + monto, 
-                        clasesExtra: (pData.clasesExtra || 0) + num,
-                        observaciones: (pData.observaciones || '') + `\n[+${num} Clases Extra]` 
-                    });
-                
-                    // 2. Sumamos al contador del ALUMNO (para que se vea en el dashboard)
-                    const aluRef = ref(db, `alumnos/${alu}`);
-                    const aluSnap = await get(aluRef);
-                    if (aluSnap.exists()) {
-                        const disponibles = aluSnap.val().clasesDisponibles || 0;
-                        await update(aluRef, { clasesDisponibles: disponibles + num });
-                    }
-                
-                    // 3. Generamos las asistencias extras
-                    for(let i=0; i<num; i++) {
-                        await push(ref(db, `asistencias/${alu}`), { 
-                            pagoId: pId, 
-                            tomada: false, 
-                            tipo: 'extra' 
-                        });
-                    }
+            if (pSnap.exists()) {
+                await update(pRef, { 
+                    monto: (parseFloat(pSnap.val().monto) || 0) + monto, 
+                    clasesExtra: (pSnap.val().clasesExtra || 0) + num,
+                    observaciones: (pSnap.val().observaciones || '') + `\n[+${num} Clases Extra]` 
+                });
+                for(let i=0; i<num; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pId, tomada: false, tipo: 'extra' });
+            }
 
-                    alert('Clases extra añadidas correctamente ✓');
-                
-                } catch (error) {
-                    console.error("Error en clases extra:", error);
-                    alert("Hubo un error al procesar las clases extra.");
-                }
         } else if (c === 'pago_parcial') {
             const pId = document.getElementById('pago-id-select').value;
             if (!pId) return alert('Selecciona un ID de pago activo.');
-            const pSnap = await get(ref(db, `pagos_tipo_a/${pId}`));
+            const pRef = ref(db, `pagos_tipo_a/${pId}`);
+            const pSnap = await get(pRef);
             if (pSnap.exists()) {
                 const nuevoFaltante = Math.max(0, pSnap.val().faltante - monto);
-                await update(ref(db, `pagos_tipo_a/${pId}`), {
-                    faltante: nuevoFaltante
-                });
-            const abonoRef = push(ref(db, `historial_abonos/${pId}`));
-            await set(abonoRef, { monto, fecha: new Date().toISOString(), medioPago: medio });
+                await update(pRef, { faltante: nuevoFaltante });
+                await set(push(ref(db, `historial_abonos/${pId}`)), { monto, fecha: new Date().toISOString(), medioPago: medio });
             }
-        // Dentro de register-pago-form submit, localiza el bloque else if (c === 'actividad_b')
+
         } else if (c === 'actividad_b') {
-            const pRef = push(ref(db, 'pagos_tipo_b'));
-            const payload = {
-                alumnoId: alu,
-                monto: monto,
-                faltante: faltante, // <-- Cambio: Ahora guarda el faltante
-                concepto: 'actividad_b',
-                fecha: new Date().toISOString(),
-                medioPago: medio,
-                observaciones: observaciones,
-                descripcion: 'Actividad Extra Tipo B'
-            };
-            await set(pRef, payload);
-        } else {
-            return alert('Concepto no soportado.');
+            // --- NUEVA LÓGICA ACT-EXT TIPO B ---
+            const isAbono = document.getElementById('es-abono-b').checked;
+
+            if (isAbono) {
+                const selectedIdB = document.getElementById('select-id-b').value;
+                if (!selectedIdB) return alert("Selecciona un folio ACT-EXT válido.");
+                
+                const bRef = ref(db, `pagos_tipo_b/${selectedIdB}`);
+                const bSnap = await get(bRef);
+                if (bSnap.exists()) {
+                    const nuevoFaltante = Math.max(0, parseFloat(bSnap.val().faltante || 0) - monto);
+                    await update(bRef, {
+                        faltante: nuevoFaltante,
+                        observaciones: (bSnap.val().observaciones || '') + `\n[Abono ${new Date().toLocaleDateString()}: $${monto}]`
+                    });
+                }
+            } else {
+                // CREAR NUEVO FOLIO ACT-EXT-XXXXX
+                const snap = await get(ref(db, 'pagos_tipo_b'));
+                let numCorrelativo = 1;
+                if (snap.exists()) {
+                    // Contamos cuántos hay para generar el siguiente
+                    numCorrelativo = Object.keys(snap.val()).length + 1;
+                }
+                const customId = `ACT-EXT-${numCorrelativo.toString().padStart(5, '0')}`;
+                
+                await set(ref(db, `pagos_tipo_b/${customId}`), {
+                    id: customId,
+                    concepto: 'actividad_b',
+                    fechaCreacion: new Date().toISOString(),
+                    monto: monto,
+                    faltante: faltante,
+                    medioPago: medio,
+                    observaciones: observaciones
+                });
+            }
         }
-        alert("Pago procesado ✓");
-        resetPagoForm();
-        window.app.hideModal('modal-pago');
+
+        alert("¡Procesado con éxito! ✓");
+        resetPagoForm(); // Esta función ya la actualizamos en el paso anterior
         window.app.changeView('dashboard-view');
         refreshData();
     } catch (err) {
-        alert(err.message || err);
+        console.error(err);
+        alert("Error: " + err.message);
     }
 });
 
@@ -533,6 +575,7 @@ function populateAlumnoSuggestions() {
                     document.getElementById('pago-alumno-search').value = chip.textContent;
                     document.getElementById('pago-alumno-id').value = id;
                     document.getElementById('concepto').dispatchEvent(new Event('change'));
+                    document.getElementById('pago-id-container').classList.add('hidden');
                 };
                 suggestions.appendChild(chip);
             });
