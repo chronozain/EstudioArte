@@ -572,7 +572,20 @@ document.getElementById('search-id-b')?.addEventListener('input', async (e) => {
         }
     }
 });
-
+document.getElementById('register-pago-form').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        // Si el usuario presiona Enter en cualquier input, evitamos el envío
+        if (e.target.tagName === 'INPUT') {
+            e.preventDefault();
+            
+            // Opcional: Si está en el buscador de alumno, pasar al monto
+            if(e.target.id === 'pago-alumno-search') {
+                document.getElementById('monto').focus();
+            }
+            return false;
+        }
+    }
+});
 // Al enviar el formulario de pago soportamos: mensualidad, clases_extra, pago_parcial, y actividad_b
 // --- ACTUALIZACIÓN FINAL DEL GUARDADO (SUBMIT) ---
 document.getElementById('register-pago-form').addEventListener('submit', async e => {
