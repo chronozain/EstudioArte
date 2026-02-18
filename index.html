@@ -193,6 +193,48 @@
             <button id="logout-btn" class="w-full py-4 bg-red-500 text-white rounded-xl font-bold">Cerrar Sesión</button>
         </main>
     </div>
+    <div id="finanzas-view" class="hidden-view flex flex-col min-h-screen bg-gray-50 pb-20">
+    <header class="bg-white p-4 border-b sticky top-0 z-30 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <button onclick="window.app.changeView('dashboard-view')" class="material-symbols-outlined text-accent">arrow_back</button>
+            <h1 class="text-xl font-bold">Finanzas</h1>
+        </div>
+        <div class="flex gap-2">
+            <select id="finanzas-mes" class="text-sm border-none bg-gray-100 rounded-lg p-1"></select>
+            <select id="finanzas-anio" class="text-sm border-none bg-gray-100 rounded-lg p-1"></select>
+        </div>
+    </header>
+
+    <main class="p-4 space-y-6">
+        <section class="grid grid-cols-2 gap-4">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-green-500">
+                <p class="text-[10px] uppercase font-bold text-gray-400">Ingresos Reales</p>
+                <p id="total-ingresos" class="text-xl font-bold text-slate-800">$0.00</p>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-red-500">
+                <p class="text-[10px] uppercase font-bold text-gray-400">Deuda por Cobrar</p>
+                <p id="total-deuda" class="text-xl font-bold text-slate-800">$0.00</p>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-2xl p-4 shadow-sm">
+            <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
+                <span class="material-symbols-outlined text-accent">analytics</span> Resumen del Mes
+            </h3>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between"><span>Mensualidades (Cerradas):</span><span id="res-mensualidades" class="font-bold">$0.00</span></div>
+                <div class="flex justify-between"><span>Clases Extra:</span><span id="res-clases-extra" class="font-bold">$0.00</span></div>
+                <div class="flex justify-between"><span>Actividades B:</span><span id="res-tipo-b" class="font-bold">$0.00</span></div>
+            </div>
+        </section>
+
+        <section>
+            <h3 class="text-sm font-bold text-gray-500 uppercase mb-3">IDs Cerrados e Ingresos Extra</h3>
+            <div id="lista-historial-finanzas" class="space-y-3">
+                </div>
+        </section>
+    </main>
+</div>
 
     <!-- Perfil (vista completa; se muestra con changeView('profile-view')) -->
     <div id="profile-view" class="hidden-view fixed inset-0 z-40 bg-gray-50 overflow-y-auto pb-10">
@@ -281,4 +323,5 @@
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
+
 
