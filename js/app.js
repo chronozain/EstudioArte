@@ -293,38 +293,49 @@ window.app.checkIn = async (aluId, aid) => {
 
 // --- PAGOS LOGIC ---
 document.getElementById('concepto').addEventListener('change', async (e) => {
-    const c = e.target.value;
-    const aluInput = document.getElementById('pago-alumno-id');
-    const aluSelect = document.getElementById('pago-alumno-select');
-    const alu = aluInput?.value || (aluSelect?.value || '');
-    
-    document.getElementById('pago-id-container').classList.add('hidden');
-    document.getElementById('extra-classes-container').classList.add('hidden');
+    const concepto = e.target.value;
+    const aluId = document.getElementById('pago-alumno-id').value;
+    const pIdContainer = document.getElementById('pago-id-container');
+    const extraContainer = document.getElementById('extra-classes-container');
+    const selId = document.getElementById('pago-id-select');
+    pIdContainer.classList.add('hidden');
+    if(extraContainer) extraContainer.classList.add('hidden');
+    selId.innerHTML = '<option value="">Seleccionar ID...</option>';
 
-    if ((c === 'pago_parcial' || c === 'clases_extra') && alu) {
+    // Solo buscamos si hay un alumno seleccionado y el concepto requiere un ID previo
+    if ((concepto === 'pago_parcial' || concepto === 'clases_extra') && aluId) {
         const snap = await get(ref(db, 'pagos_tipo_a'));
-        const selId = document.getElementById('pago-id-select');
-        selId.innerHTML = '<option value="">Seleccionar ID Activo</option>';
         
         if (snap.exists()) {
             const hoy = new Date();
-            Object.entries(snap.val()).forEach(([k, p]) => {
-                const esActivo = new Date(p.fechaVencimiento) > hoy;
-                const tieneDeuda = (p.faltante || 0) > 0;
+            let encontrados = 0;
 
-                // REGLA 1: Pago Parcial -> Solo activos con deuda
-                if (c === 'pago_parcial' && p.alumnoId === alu && esActivo && tieneDeuda) {
-                    selId.innerHTML += `<option value="${k}">ID: ${k.slice(-6)} (Adeudo: $${p.faltante})</option>`;
-                    document.getElementById('pago-id-container').classList.remove('hidden');
+            Object.entries(snap.val()).forEach(([id, p]) => {
+                const esDelAlumno = p.alumnoId === aluId;
+                const esActivo = new Date(p.fechaVencimiento) > hoy;
+                const faltante = parseFloat(p.faltante || 0);
+
+                // REGLA: Pago Parcial -> Solo activos con deuda
+                if (concepto === 'pago_parcial' && esDelAlumno && esActivo && faltante > 0) {
+                    selId.innerHTML += `<option value="${id}">ID: ${id.slice(-6)} (Debe: $${faltante})</option>`;
+                    encontrados++;
                 }
-                // REGLA 2: Clases Extra -> Solo activos sin deuda
-                else if (c === 'clases_extra' && p.alumnoId === alu && esActivo && !tieneDeuda) {
-                    selId.innerHTML += `<option value="${k}">ID: ${k.slice(-6)} (Pagado)</option>`;
-                    document.getElementById('pago-id-container').classList.remove('hidden');
+                // REGLA: Clases Extra -> Solo activos SIN deuda (Faltante 0)
+                else if (concepto === 'clases_extra' && esDelAlumno && esActivo && faltante <= 0) {
+                    selId.innerHTML += `<option value="${id}" selected>ID: ${id.slice(-6)} (Pagado ✓)</option>`;
+                    encontrados++;
                 }
             });
+
+            if (encontrados > 0) {
+                pIdContainer.classList.remove('hidden');
+                if (concepto === 'clases_extra' && extraContainer) {
+                    extraContainer.classList.remove('hidden');
+                }
+            }
+            // Eliminamos el alert() de aquí para que no moleste al seleccionar al alumno.
+            // La validación solo se hará al dar clic en "Confirmar Pago".
         }
-        if (c === 'clases_extra') document.getElementById('extra-classes-container').classList.remove('hidden');
     }
 });
 
@@ -383,7 +394,7 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
                             tipo: 'extra' 
                         });
                     }
-                    
+
                     alert('Clases extra añadidas correctamente ✓');
                 
                 } catch (error) {
@@ -458,6 +469,7 @@ function populateAlumnoSuggestions() {
                 chip.onclick = () => {
                     document.getElementById('pago-alumno-search').value = chip.textContent;
                     document.getElementById('pago-alumno-id').value = id;
+                    document.getElementById('concepto').dispatchEvent(new Event('change'));
                 };
                 suggestions.appendChild(chip);
             });
