@@ -468,6 +468,7 @@ window.app.checkIn = async (aluId, aid) => {
 // --- NUEVA LÓGICA DE CONCEPTOS Y TIPO B ---
 document.getElementById('concepto').addEventListener('change', async (e) => {
     const concepto = e.target.value;
+    const planContainer = document.getElementById('plan-clases-container');
     const aluId = document.getElementById('pago-alumno-id').value;
     const pIdContainer = document.getElementById('pago-id-container');
     const extraContainer = document.getElementById('extra-classes-container');
@@ -483,6 +484,12 @@ document.getElementById('concepto').addEventListener('change', async (e) => {
     tipoBLogic.classList.add('hidden');
     seccionAlumno.classList.remove('hidden');
     selId.innerHTML = '<option value="">Seleccionar ID...</option>';
+
+    if (concepto === 'mensualidad') {
+        planContainer.classList.remove('hidden');
+    } else {
+        planContainer.classList.add('hidden');
+    }
 
     // REGLA: Si es Actividad B, ocultamos la sección del alumno
     if (concepto === 'actividad_b') {
@@ -515,7 +522,7 @@ document.getElementById('concepto').addEventListener('change', async (e) => {
         const faltante = parseFloat(p.faltante || 0);
 
         if (concepto === 'pago_parcial' && faltante > 0) {
-            selId.innerHTML = `<option value="${id}" selected>ID: ${id.slice(-6)} (Debe: $${faltante})</option>`;
+            selId.innerHTML = `<option value="${id}" selected>Aplicar a Deuda: $${faltante} (ID: ${id.slice(-6)})</option>`;
             selId.value = id;
             pIdContainer.classList.remove('hidden');
         } else if (concepto === 'pago_parcial' && faltante <= 0) {
@@ -781,12 +788,44 @@ function populateAlumnoSuggestions() {
     });
 }
 
-// Función para seleccionar al alumno de la lista
-window.app.selectAlumnoPago = (id, nombreCompleto) => {
+document.getElementById('pago-alumno-search')?.addEventListener('input', async (e) => {
+    const term = e.target.value.toLowerCase();
+    const container = document.getElementById('pago-alumno-suggestions');
+    const hiddenInput = document.getElementById('pago-alumno-id');
+    
+    // Limpiar sugerencias e ID si el término es corto
+    if (term.length < 2) {
+        container.innerHTML = '';
+        hiddenInput.value = '';
+        return;
+    }
+
+    const snap = await get(ref(db, 'alumnos'));
+    if (snap.exists()) {
+        const alumnos = snap.val();
+        // Filtrar alumnos por nombre o apellido
+        const filtrados = Object.entries(alumnos).filter(([id, data]) => 
+            `${data.nombre} ${data.apellidos || ''}`.toLowerCase().includes(term)
+        );
+
+        // Crear los "chips" de sugerencia
+        container.innerHTML = filtrados.map(([id, data]) => `
+            <button type="button" 
+                onclick="seleccionarAlumno('${id}', '${data.nombre} ${data.apellidos || ''}')"
+                class="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full border border-primary/20 hover:bg-primary hover:text-white transition-colors">
+                ${data.nombre} ${data.apellidos || ''}
+            </button>
+        `).join('');
+    }
+});
+
+// Función global para capturar la selección
+window.seleccionarAlumno = (id, nombreCompleto) => {
     document.getElementById('pago-alumno-id').value = id;
     document.getElementById('pago-alumno-search').value = nombreCompleto;
-    document.getElementById('alumno-suggestions').innerHTML = '';
-    // Disparamos el cambio de concepto para que busque mensualidades pendientes de este alumno
+    document.getElementById('pago-alumno-suggestions').innerHTML = ''; // Limpiar sugerencias
+    
+    // Opcional: Notificar al sistema que el alumno cambió para validar mensualidades activas
     document.getElementById('concepto').dispatchEvent(new Event('change'));
 };
 
