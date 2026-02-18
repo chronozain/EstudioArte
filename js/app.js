@@ -200,6 +200,28 @@ document.getElementById('edit-student-form').addEventListener('submit', async e 
     refreshData();
 });
 
+function resetPagoForm() {
+    const form = document.getElementById('register-pago-form');
+    if (form) {
+        form.reset(); // Limpia los inputs estándar
+    }
+
+    // Limpieza de campos manuales de búsqueda (CHIPS)
+    const aluIdInput = document.getElementById('pago-alumno-id');
+    const aluSearchInput = document.getElementById('pago-alumno-search');
+    
+    if (aluIdInput) aluIdInput.value = '';
+    if (aluSearchInput) aluSearchInput.value = '';
+    
+    // Ocultar selectores de ID (Pago Parcial / Clases Extra)
+    document.getElementById('pago-id-container')?.classList.add('hidden');
+    document.getElementById('extra-classes-container')?.classList.add('hidden');
+
+    // Resetear el selector de IDs de pago
+    const selId = document.getElementById('pago-id-select');
+    if (selId) selId.innerHTML = '<option value="">Seleccionar ID...</option>';
+}
+
 // --- PERFIL Y ASISTENCIA (Lógica de la 3ra Clase) ---
 async function openProfile(aluId, s, pKey, pData) {
     // Si no llegan s/pKey/pData, los cargamos
@@ -431,6 +453,8 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
             return alert('Concepto no soportado.');
         }
         alert("Pago procesado ✓");
+        resetPagoForm();
+        window.app.hideModal('modal-pago');
         window.app.changeView('dashboard-view');
         refreshData();
     } catch (err) {
@@ -442,18 +466,41 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
 document.getElementById('is-adult')?.addEventListener('change', e => document.getElementById('tutor-section').classList.toggle('hidden', e.target.checked));
 document.getElementById('add-student-form')?.addEventListener('submit', async e => {
     e.preventDefault();
+
+    // Obtenemos los valores de los campos
+    const nombre = document.getElementById('new-name').value;
+    const apellidos = document.getElementById('new-lastname').value;
+    const contacto = document.getElementById('new-contact').value;
+    const esMayor = document.getElementById('is-adult')?.checked || false;
+
+    // Creamos el objeto del alumno con el contador en 0
     const s = {
-        nombre: document.getElementById('new-name').value,
-        apellidos: document.getElementById('new-lastname').value,
-        contacto: document.getElementById('new-contact').value,
-        esMayor: document.getElementById('is-adult')?.checked || false,
-        tutor: { nombre: document.getElementById('tutor-name')?.value || '', telefono: document.getElementById('tutor-phone')?.value || '' }
+        nombre: nombre,
+        apellidos: apellidos,
+        contacto: contacto,
+        esMayor: esMayor,
+        clasesDisponibles: 0, 
+        tutor: { 
+            nombre: document.getElementById('tutor-name')?.value || '', 
+            telefono: document.getElementById('tutor-phone')?.value || '' 
+        },
+        fechaRegistro: new Date().toISOString()
     };
-    const p = push(ref(db, 'alumnos'));
-    await set(p, s);
-    alert("Inscripción exitosa");
-    window.app.hideModal('modal-alumno');
-    refreshData();
+
+    try {
+        const p = push(ref(db, 'alumnos'));
+        await set(p, s);
+        
+        alert("¡Inscripción exitosa! ✓");
+        
+        // Limpiamos y cerramos
+        window.app.hideModal('modal-alumno');
+        document.getElementById('add-student-form').reset();
+        refreshData();
+    } catch (error) {
+        console.error("Error al inscribir:", error);
+        alert("Hubo un error al guardar al alumno.");
+    }
 });
 
 // Sugerencias para pago (nueva) y select clásico (compatibilidad)
