@@ -23,17 +23,17 @@ window.app = {
     closeView: id => document.getElementById(id)?.classList.add('hidden-view'),
     changeView: (view) => {
         // views con sufijo -view
-        ['dashboard-view', 'alumnos-view', 'pagos-view', 'ajustes-view', 'profile-view'].forEach(v => 
+        ['dashboard-view', 'alumnos-view', 'pagos-view', 'ajustes-view', 'profile-view'].forEach(v =>
             document.getElementById(v)?.classList.add('hidden-view')
         );
         // aceptar tanto 'dashboard' como 'dashboard-view' por compatibilidad
-        const target = document.getElementById(view) || document.getElementById(view + '-view') || document.getElementById(view.replace('-view',''));
+        const target = document.getElementById(view) || document.getElementById(view + '-view') || document.getElementById(view.replace('-view', ''));
         if (target) target.classList.remove('hidden-view');
 
         // actualizar nav visual
         document.querySelectorAll('.nav-btn').forEach(b => {
             const navKey = b.dataset.nav;
-            const activeKey = (view.includes('-') ? view.split('-')[0] : view.replace('-view',''));
+            const activeKey = (view.includes('-') ? view.split('-')[0] : view.replace('-view', ''));
             b.classList.toggle('text-accent', navKey === activeKey);
             b.classList.toggle('text-gray-400', navKey !== activeKey);
         });
@@ -109,7 +109,7 @@ async function loadActiveStudents() {
 
     Object.entries(aluSnap.val()).forEach(([id, s]) => {
         const pagoKey = Object.keys(pagosA).find(k => pagosA[k].alumnoId === id && new Date(pagosA[k].fechaVencimiento) > hoy);
-        
+
         if (pagoKey) {
             const p = pagosA[pagoKey];
             const aluAsist = asistencias[id] ? Object.values(asistencias[id]).filter(a => a.pagoId === pagoKey) : [];
@@ -137,7 +137,40 @@ async function loadActiveStudents() {
         }
     });
 }
+// Función para cerrar IDs vencidos
+async function procesarCierresAutomaticos() {
+    const pagosSnap = await get(ref(db, 'pagos_tipo_a'));
+    if (!pagosSnap.exists()) return;
 
+    const hoy = new Date();
+    const pagos = pagosSnap.val();
+    const actualizaciones = {};
+
+    for (const [id, p] of Object.entries(pagos)) {
+        const fechaVence = new Date(p.fechaVencimiento);
+        // Si ya venció y NO está marcado como cerrado
+        if (fechaVence < hoy && !p.cerrado) {
+            actualizaciones[`pagos_tipo_a/${id}/cerrado`] = true;
+            actualizaciones[`pagos_tipo_a/${id}/fechaCierre`] = p.fechaVencimiento;
+
+            // Marcar todas sus asistencias pendientes como "tomadas" por cierre
+            const asistSnap = await get(ref(db, `asistencias/${p.alumnoId}`));
+            if (asistSnap.exists()) {
+                Object.entries(asistSnap.val()).forEach(([aid, a]) => {
+                    if (a.pagoId === id && !a.tomada) {
+                        actualizaciones[`asistencias/${p.alumnoId}/${aid}/tomada`] = true;
+                        actualizaciones[`asistencias/${p.alumnoId}/${aid}/fechaTomada`] = p.fechaVencimiento;
+                        actualizaciones[`asistencias/${p.alumnoId}/${aid}/nota`] = "Cierre automático por vencimiento";
+                    }
+                });
+            }
+        }
+    }
+    if (Object.keys(actualizaciones).length > 0) {
+        await update(ref(db), actualizaciones);
+        console.log("Cierres procesados");
+    }
+}
 // 2. MODULO ALUMNOS: LISTA COMPLETA Y BUSCADOR
 function loadFullStudents(filter = '') {
     onValue(ref(db, 'alumnos'), snapshot => {
@@ -189,9 +222,9 @@ document.getElementById('edit-student-form').addEventListener('submit', async e 
         nombre: document.getElementById('edit-name').value,
         apellidos: document.getElementById('edit-lastname').value,
         contacto: document.getElementById('edit-contact').value,
-        tutor: { 
-            nombre: document.getElementById('edit-tutor-name').value, 
-            telefono: document.getElementById('edit-tutor-phone').value 
+        tutor: {
+            nombre: document.getElementById('edit-tutor-name').value,
+            telefono: document.getElementById('edit-tutor-phone').value
         }
     };
     await update(ref(db, `alumnos/${id}`), upd);
@@ -212,7 +245,7 @@ function resetPagoForm() {
     document.getElementById('seccion-alumno-pago')?.classList.remove('hidden');
     document.getElementById('faltante').disabled = false;
     document.getElementById('select-id-b').classList.add('hidden');
-    
+
     const selId = document.getElementById('pago-id-select');
     if (selId) selId.innerHTML = '<option value="">Seleccionar ID...</option>';
 }
@@ -245,7 +278,7 @@ async function openProfile(aluId, s, pKey, pData) {
         <div class="bg-white rounded-3xl p-6 shadow-sm flex flex-col items-center">
             <div class="size-20 bg-primary/10 rounded-full flex items-center justify-center text-primary text-3xl font-bold mb-4">${s.nombre[0]}${s.apellidos ? s.apellidos[0] : ''}</div>
             <h2 class="text-xl font-bold">${s.nombre} ${s.apellidos || ''}</h2>
-            <p class="text-xs text-gray-500 mb-4">ID Pago: ${pKey ? '#'+pKey.slice(-6) : '-'}</p>
+            <p class="text-xs text-gray-500 mb-4">ID Pago: ${pKey ? '#' + pKey.slice(-6) : '-'}</p>
             <div class="flex gap-4 w-full">
                 <a href="tel:${s.contacto || '#'}" class="flex-1 py-3 bg-primary text-white rounded-xl text-center font-bold">Llamar</a>
                 <button class="flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold">Mensaje</button>
@@ -256,14 +289,14 @@ async function openProfile(aluId, s, pKey, pData) {
             <h3 class="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">Control de Asistencia</h3>
             <div class="space-y-4">
                 ${asistencias.map(([aid, a], i) => {
-                    const esTercera = i === 2;
-                    const bloqueada = esTercera && pData && pData.faltante > 0;
-                    const statusClass = a.tomada ? 'bg-green-500 text-white' : (bloqueada ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600');
-                    return `
+        const esTercera = i === 2;
+        const bloqueada = esTercera && pData && pData.faltante > 0;
+        const statusClass = a.tomada ? 'bg-green-500 text-white' : (bloqueada ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600');
+        return `
                     <div class="flex items-center justify-between border-b border-gray-50 pb-3">
                         <div>
-                            <p class="font-bold text-sm">Clase ${i+1} (${i < 3 ? 'Base' : 'Extra'})</p>
-                            <p class="text-[10px] text-gray-400">${a.tomada ? 'Tomada el: '+new Date(a.fechaTomada).toLocaleDateString() : 'Pendiente'}</p>
+                            <p class="font-bold text-sm">Clase ${i + 1} (${i < 3 ? 'Base' : 'Extra'})</p>
+                            <p class="text-[10px] text-gray-400">${a.tomada ? 'Tomada el: ' + new Date(a.fechaTomada).toLocaleDateString() : 'Pendiente'}</p>
                         </div>
                         <button 
                             ${(!a.tomada && !bloqueada) ? `onclick="window.app.checkIn('${aluId}', '${aid}')"` : ''}
@@ -271,7 +304,7 @@ async function openProfile(aluId, s, pKey, pData) {
                             ${a.tomada ? 'Tomada ✓' : (bloqueada ? 'Bloqueada ($)' : 'Marcar')}
                         </button>
                     </div>`;
-                }).join('')}
+    }).join('')}
             </div>
         </div>
 
@@ -294,7 +327,79 @@ async function openProfile(aluId, s, pKey, pData) {
         </div>
     `;
 }
+async function cargarFinanzas(mes, anio) {
+    await procesarCierresAutomaticos(); // Asegurar datos actualizados
 
+    const [pagosASnap, pagosBSnap] = await Promise.all([
+        get(ref(db, 'pagos_tipo_a')),
+        get(ref(db, 'pagos_tipo_b'))
+    ]);
+
+    let ingresosReales = 0;
+    let deudaTotal = 0;
+    let sumMensualidades = 0;
+    let sumClasesExtra = 0;
+    let sumTipoB = 0;
+
+    const container = document.getElementById('lista-historial-finanzas');
+    container.innerHTML = '';
+
+    // Procesar Pagos Tipo A (Mensualidades y Clases Extra)
+    if (pagosASnap.exists()) {
+        Object.entries(pagosASnap.val()).forEach(([id, p]) => {
+            if (p.cerrado) {
+                const fCierre = new Date(p.fechaCierre);
+                if (fCierre.getMonth() == mes && fCierre.getFullYear() == anio) {
+                    ingresosReales += p.monto;
+                    deudaTotal += (p.faltante || 0);
+                    sumMensualidades += p.monto;
+
+                    // Renderizar en lista
+                    renderFinanzaItem(container, `ID: ${id.slice(-6)}`, p.monto, p.faltante, 'Mensualidad', 'event_available');
+                }
+            }
+        });
+    }
+
+    // Procesar Pagos Tipo B (Actividades Extra)
+    if (pagosBSnap.exists()) {
+        Object.entries(pagosBSnap.val()).forEach(([id, b]) => {
+            const fCreacion = new Date(b.fechaCreacion || b.fecha);
+            if (fCreacion.getMonth() == mes && fCreacion.getFullYear() == anio) {
+                ingresosReales += b.monto;
+                deudaTotal += (b.faltante || 0);
+                sumTipoB += b.monto;
+
+                renderFinanzaItem(container, id, b.monto, b.faltante, 'Actividad B', 'Palette');
+            }
+        });
+    }
+
+    // Actualizar UI del Dashboard de Finanzas
+    document.getElementById('total-ingresos').textContent = `$${ingresosReales.toFixed(2)}`;
+    document.getElementById('total-deuda').textContent = `$${deudaTotal.toFixed(2)}`;
+    document.getElementById('res-mensualidades').textContent = `$${sumMensualidades.toFixed(2)}`;
+    document.getElementById('res-tipo-b').textContent = `$${sumTipoB.toFixed(2)}`;
+}
+
+function renderFinanzaItem(container, titulo, monto, deuda, sub, icono) {
+    const div = document.createElement('div');
+    div.className = "bg-white p-3 rounded-xl flex items-center justify-between border-b";
+    div.innerHTML = `
+        <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-gray-400">${icono}</span>
+            <div>
+                <p class="font-bold text-sm">${titulo}</p>
+                <p class="text-[10px] text-gray-500">${sub}</p>
+            </div>
+        </div>
+        <div class="text-right">
+            <p class="text-sm font-bold text-green-600">+$${monto}</p>
+            ${deuda > 0 ? `<p class="text-[10px] text-red-500">Debe: $${deuda}</p>` : ''}
+        </div>
+    `;
+    container.appendChild(div);
+}
 // Exponer también una función rápida para abrir perfil desde lista completa
 window.app.openQuickProfile = async (id) => openProfile(id);
 
@@ -316,16 +421,16 @@ document.getElementById('concepto').addEventListener('change', async (e) => {
     const pIdContainer = document.getElementById('pago-id-container');
     const extraContainer = document.getElementById('extra-classes-container');
     const selId = document.getElementById('pago-id-select');
-    
+
     // Elementos nuevos para Actividad B
     const seccionAlumno = document.getElementById('seccion-alumno-pago');
     const tipoBLogic = document.getElementById('tipo-b-logic');
 
     // Reset general de vistas
     pIdContainer.classList.add('hidden');
-    if(extraContainer) extraContainer.classList.add('hidden');
+    if (extraContainer) extraContainer.classList.add('hidden');
     tipoBLogic.classList.add('hidden');
-    seccionAlumno.classList.remove('hidden'); 
+    seccionAlumno.classList.remove('hidden');
     selId.innerHTML = '<option value="">Seleccionar ID...</option>';
 
     // REGLA: Si es Actividad B, ocultamos la sección del alumno
@@ -343,7 +448,7 @@ document.getElementById('concepto').addEventListener('change', async (e) => {
 
     if (snap.exists()) {
         const pagos = snap.val();
-        pagoActivoEncontrado = Object.entries(pagos).find(([id, p]) => 
+        pagoActivoEncontrado = Object.entries(pagos).find(([id, p]) =>
             p.alumnoId === aluId && new Date(p.fechaVencimiento) > hoy
         );
     }
@@ -383,7 +488,7 @@ document.getElementById('es-abono-b')?.addEventListener('change', (e) => {
     const isAbono = e.target.checked;
     const searchCont = document.getElementById('search-b-container');
     const faltanteInput = document.getElementById('faltante');
-    
+
     if (isAbono) {
         searchCont.classList.remove('hidden');
         faltanteInput.value = '0';
@@ -402,12 +507,12 @@ document.getElementById('search-id-b')?.addEventListener('input', async (e) => {
         const snap = await get(ref(db, 'pagos_tipo_b'));
         const select = document.getElementById('select-id-b');
         select.innerHTML = '<option value="">Selecciona el ID...</option>';
-        
+
         if (snap.exists()) {
-            const found = Object.entries(snap.val()).filter(([id, data]) => 
+            const found = Object.entries(snap.val()).filter(([id, data]) =>
                 id.includes(val) && parseFloat(data.faltante || 0) > 0
             );
-            
+
             if (found.length > 0) {
                 select.classList.remove('hidden');
                 found.forEach(([id, data]) => {
@@ -429,7 +534,7 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
     const faltante = parseFloat(document.getElementById('faltante').value || '0');
     const medio = document.getElementById('medio-pago')?.value || '';
     const observaciones = document.getElementById('observaciones')?.value || '';
-    
+
     // REGLA: Si no es Actividad B, validamos que exista un Alumno seleccionado
     let alu = null;
     if (c !== 'actividad_b') {
@@ -442,7 +547,7 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
             const fv = new Date(); fv.setDate(fv.getDate() + 30);
             const pRef = push(ref(db, 'pagos_tipo_a'));
             await set(pRef, { alumnoId: alu, monto, faltante, concepto: c, fechaCreacion: new Date().toISOString(), fechaVencimiento: fv.toISOString(), clasesExtra: 0, medioPago: medio, observaciones });
-            for(let i=0; i<3; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pRef.key, tomada: false });
+            for (let i = 0; i < 3; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pRef.key, tomada: false });
 
         } else if (c === 'clases_extra') {
             const pId = document.getElementById('pago-id-select').value;
@@ -450,14 +555,14 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
             const num = parseInt(document.getElementById('num-clases-extra').value || '1');
             const pRef = ref(db, `pagos_tipo_a/${pId}`);
             const pSnap = await get(pRef);
-            
+
             if (pSnap.exists()) {
-                await update(pRef, { 
-                    monto: (parseFloat(pSnap.val().monto) || 0) + monto, 
+                await update(pRef, {
+                    monto: (parseFloat(pSnap.val().monto) || 0) + monto,
                     clasesExtra: (pSnap.val().clasesExtra || 0) + num,
-                    observaciones: (pSnap.val().observaciones || '') + `\n[+${num} Clases Extra]` 
+                    observaciones: (pSnap.val().observaciones || '') + `\n[+${num} Clases Extra]`
                 });
-                for(let i=0; i<num; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pId, tomada: false, tipo: 'extra' });
+                for (let i = 0; i < num; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pId, tomada: false, tipo: 'extra' });
             }
 
         } else if (c === 'pago_parcial') {
@@ -478,7 +583,7 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
             if (isAbono) {
                 const selectedIdB = document.getElementById('select-id-b').value;
                 if (!selectedIdB) return alert("Selecciona un folio ACT-EXT válido.");
-                
+
                 const bRef = ref(db, `pagos_tipo_b/${selectedIdB}`);
                 const bSnap = await get(bRef);
                 if (bSnap.exists()) {
@@ -497,7 +602,7 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
                     numCorrelativo = Object.keys(snap.val()).length + 1;
                 }
                 const customId = `ACT-EXT-${numCorrelativo.toString().padStart(5, '0')}`;
-                
+
                 await set(ref(db, `pagos_tipo_b/${customId}`), {
                     id: customId,
                     concepto: 'actividad_b',
@@ -537,10 +642,10 @@ document.getElementById('add-student-form')?.addEventListener('submit', async e 
         apellidos: apellidos,
         contacto: contacto,
         esMayor: esMayor,
-        clasesDisponibles: 0, 
-        tutor: { 
-            nombre: document.getElementById('tutor-name')?.value || '', 
-            telefono: document.getElementById('tutor-phone')?.value || '' 
+        clasesDisponibles: 0,
+        tutor: {
+            nombre: document.getElementById('tutor-name')?.value || '',
+            telefono: document.getElementById('tutor-phone')?.value || ''
         },
         fechaRegistro: new Date().toISOString()
     };
@@ -548,9 +653,9 @@ document.getElementById('add-student-form')?.addEventListener('submit', async e 
     try {
         const p = push(ref(db, 'alumnos'));
         await set(p, s);
-        
+
         alert("¡Inscripción exitosa! ✓");
-        
+
         // Limpiamos y cerramos
         window.app.hideModal('modal-alumno');
         document.getElementById('add-student-form').reset();
