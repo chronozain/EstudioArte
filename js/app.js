@@ -575,15 +575,13 @@ document.getElementById('search-id-b')?.addEventListener('input', async (e) => {
 });
 document.getElementById('register-pago-form').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
-        // Si el usuario presiona Enter en cualquier input, evitamos el envío
-        if (e.target.tagName === 'INPUT') {
-            e.preventDefault();
-            
-            // Opcional: Si está en el buscador de alumno, pasar al monto
-            if(e.target.id === 'pago-alumno-search') {
+        const target = e.target;
+        if (target.tagName === 'INPUT') {
+            e.preventDefault(); // Solo evita que el formulario se envíe solo
+            // Si terminaste de escribir el nombre, salta al monto
+            if(target.id === 'pago-alumno-search') {
                 document.getElementById('monto').focus();
             }
-            return false;
         }
     }
 });
@@ -673,44 +671,53 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
                 alert("Abono registrado con éxito");
             }
 
-        } else if (c === 'actividad_b') {
-            // --- NUEVA LÓGICA ACT-EXT TIPO B ---
+            } else if (c === 'actividad_b') {
             const isAbono = document.getElementById('es-abono-b').checked;
 
             if (isAbono) {
-                const selectedIdB = document.getElementById('select-id-b').value;
-                if (!selectedIdB) return alert("Selecciona un folio ACT-EXT válido.");
-
-                const bRef = ref(db, `pagos_tipo_b/${selectedIdB}`);
-                const bSnap = await get(bRef);
-                if (bSnap.exists()) {
-                    const nuevoFaltante = Math.max(0, parseFloat(bSnap.val().faltante || 0) - monto);
-                    await update(bRef, {
+                // Lógica de Abono a cuenta existente
+                const pId = document.getElementById('select-id-b').value;
+                if (!pId) return alert('Selecciona un Folio de Actividad B.');
+                
+                const pRef = ref(db, `pagos_tipo_b/${pId}`);
+                const pSnap = await get(pRef);
+                if (pSnap.exists()) {
+                    const nuevoFaltante = Math.max(0, parseFloat(pSnap.val().faltante || 0) - monto);
+                    await update(pRef, { 
                         faltante: nuevoFaltante,
-                        observaciones: (bSnap.val().observaciones || '') + `\n[Abono ${new Date().toLocaleDateString()}: $${monto}]`
+                        observaciones: (pSnap.val().observaciones || '') + `\n[Abono: $${monto} - ${new Date().toLocaleDateString()}]`
                     });
+                    alert("Abono a Actividad B registrado.");
                 }
             } else {
-                // CREAR NUEVO FOLIO ACT-EXT-XXXXX
-                const snap = await get(ref(db, 'pagos_tipo_b'));
-                let numCorrelativo = 1;
-                if (snap.exists()) {
-                    // Contamos cuántos hay para generar el siguiente
-                    numCorrelativo = Object.keys(snap.val()).length + 1;
-                }
-                const customId = `ACT-EXT-${numCorrelativo.toString().padStart(5, '0')}`;
-
-                await set(ref(db, `pagos_tipo_b/${customId}`), {
-                    id: customId,
-                    concepto: 'actividad_b',
+                // Lógica de Nueva Actividad B
+                const desc = document.getElementById('observaciones').value;
+                if (!desc) return alert('Por favor describe la actividad en Observaciones.');
+                
+                await push(ref(db, 'pagos_tipo_b'), {
+                    monto,
+                    faltante,
+                    descripcion: desc,
+                    fecha: new Date().toISOString(),
                     fechaCreacion: new Date().toISOString(),
-                    monto: monto,
-                    faltante: faltante,
                     medioPago: medio,
-                    observaciones: observaciones
+                    alumnoId: document.getElementById('pago-alumno-id').value || "VENTA_GENERAL"
                 });
+                alert("Nueva Actividad B registrada.");
             }
         }
+
+        // LIMPIEZA FINAL
+        alert("¡Operación Exitosa!");
+        resetPagoForm();
+        window.app.changeView('dashboard-view');
+        refreshData();
+
+    } catch (error) {
+        console.error(error);
+        alert("Error al procesar el pago: " + error.message);
+    }
+});
 
         alert("¡Procesado con éxito! ✓");
         resetPagoForm(); // Esta función ya la actualizamos en el paso anterior
@@ -766,27 +773,41 @@ document.getElementById('add-student-form')?.addEventListener('submit', async e 
 // Sugerencias para pago (nueva) y select clásico (compatibilidad)
 // Localiza esta parte en tu código:
 function populateAlumnoSuggestions() {
-    // ... lógica de obtención de alumnos ...
-    onValue(ref(db, 'alumnos'), snapshot => {
-        const container = document.getElementById('pago-alumno-suggestions');
-        container.innerHTML = '';
+    const searchInput = document.getElementById('pago-alumno-search');
+    const suggestionsContainer = document.getElementById('alumno-suggestions');
+    if (!searchInput || !suggestionsContainer) return;
+
+    searchInput.addEventListener('input', async (e) => {
+        const term = e.target.value.toLowerCase();
+        if (term.length < 2) {
+            suggestionsContainer.innerHTML = '';
+            return;
+        }
+
+        const snap = await get(ref(db, 'alumnos'));
+        const alumnos = snap.val() || {};
         
-        Object.entries(snapshot.val()).forEach(([id, s]) => {
-            const btn = document.createElement('button');
-            btn.type = 'button'; // <--- ESTO ES LO QUE FALTA. Evita que el botón envíe el form.
-            btn.className = "px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold";
-            btn.textContent = `${s.nombre} ${s.apellidos || ''}`;
-            btn.onclick = () => {
-                document.getElementById('pago-alumno-search').value = `${s.nombre} ${s.apellidos || ''}`;
-                document.getElementById('pago-alumno-id').value = id;
-                container.innerHTML = ''; // Limpia sugerencias
-                // Opcional: saltar automáticamente al campo de monto
-                document.getElementById('monto').focus();
-            };
-            container.appendChild(btn);
-        });
+        const filtrados = Object.entries(alumnos).filter(([id, s]) => 
+            `${s.nombre} ${s.apellidos || ''}`.toLowerCase().includes(term)
+        );
+
+        suggestionsContainer.innerHTML = filtrados.map(([id, s]) => `
+            <div class="p-2 hover:bg-gray-100 cursor-pointer text-sm border-b" 
+                 onclick="window.app.selectAlumnoPago('${id}', '${s.nombre} ${s.apellidos || ''}')">
+                ${s.nombre} ${s.apellidos || ''}
+            </div>
+        `).join('');
     });
 }
+
+// Función para seleccionar al alumno de la lista
+window.app.selectAlumnoPago = (id, nombreCompleto) => {
+    document.getElementById('pago-alumno-id').value = id;
+    document.getElementById('pago-alumno-search').value = nombreCompleto;
+    document.getElementById('alumno-suggestions').innerHTML = '';
+    // Disparamos el cambio de concepto para que busque mensualidades pendientes de este alumno
+    document.getElementById('concepto').dispatchEvent(new Event('change'));
+};
 
 // Compatibilidad: llenar select 'pago-alumno-select' como en la versión base
 function populateAlumnoSelect() {
