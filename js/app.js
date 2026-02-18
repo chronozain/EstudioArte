@@ -627,9 +627,26 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
                 for (let i = 0; i < num; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pId, tomada: false, tipo: 'extra' });
             }
 
-        } else if (c === 'pago_parcial') {
-            const pId = document.getElementById('pago-id-select').value;
-            if (!pId) return alert('Selecciona un ID de pago activo.');
+            } else if (c === 'pago_parcial') {
+            // 1. Intentamos obtener el ID del select
+            let pId = document.getElementById('pago-id-select').value;
+
+            // 2. RED DE SEGURIDAD: Si por alguna razón el select está vacío, lo buscamos manualmente
+            if (!pId) {
+                const aluId = document.getElementById('pago-alumno-id').value || document.getElementById('pago-alumno-select')?.value;
+                const snap = await get(ref(db, 'pagos_tipo_a'));
+                const hoy = new Date();
+                const encontrado = Object.entries(snap.val() || {}).find(([id, p]) => 
+                    p.alumnoId === aluId && new Date(p.fechaVencimiento) > hoy
+                );
+                if (encontrado) {
+                    pId = encontrado[0];
+                }
+            }
+
+            // 3. Si después de la red de seguridad sigue vacío, avisamos
+            if (!pId) return alert('No se pudo encontrar un ID de pago activo para este alumno.');
+
             const pRef = ref(db, `pagos_tipo_a/${pId}`);
             const pSnap = await get(pRef);
 
@@ -639,14 +656,21 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
                 const nuevoFaltante = Math.max(0, actualFaltante - abono);
 
                 // Actualizamos el faltante en el registro principal del pago
-                await update(pRef, { faltante: nuevoFaltante });
+                await update(pRef, { 
+                    faltante: nuevoFaltante,
+                    // Agregamos una nota en observaciones para saber que hubo abonos
+                    observaciones: (pSnap.val().observaciones || '') + `\n[Abono: $${abono} - ${new Date().toLocaleDateString()}]`
+                });
 
                 // Guardamos el registro del abono en el historial
                 await set(push(ref(db, `historial_abonos/${pId}`)), { 
                     monto: abono, 
                     fecha: new Date().toISOString(), 
-                    medioPago: medio 
+                    medioPago: medio,
+                    alumnoId: pSnap.val().alumnoId // Añadimos el ID del alumno para reportes futuros
                 });
+
+                alert("Abono registrado con éxito");
             }
 
         } else if (c === 'actividad_b') {
