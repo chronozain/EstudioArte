@@ -299,21 +299,24 @@ async function openProfile(aluId, s, pKey, pData) {
             <h3 class="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">Control de Asistencia</h3>
             <div class="space-y-4">
                 ${asistencias.map(([aid, a], i) => {
-        const esTercera = i === 2;
-        const bloqueada = esTercera && pData && pData.faltante > 0;
+        const totalBase = pData.clasesBase || 4; 
+        const esUltimaBase = i === (totalBase - 1); 
+        
+        const bloqueada = esUltimaBase && pData && pData.faltante > 0;
         const statusClass = a.tomada ? 'bg-green-500 text-white' : (bloqueada ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600');
+        
         return `
-                    <div class="flex items-center justify-between border-b border-gray-50 pb-3">
-                        <div>
-                            <p class="font-bold text-sm">Clase ${i + 1} (${i < 3 ? 'Base' : 'Extra'})</p>
-                            <p class="text-[10px] text-gray-400">${a.tomada ? 'Tomada el: ' + new Date(a.fechaTomada).toLocaleDateString() : 'Pendiente'}</p>
-                        </div>
-                        <button 
-                            ${(!a.tomada && !bloqueada) ? `onclick="window.app.checkIn('${aluId}', '${aid}')"` : ''}
-                            class="px-4 py-2 rounded-lg text-xs font-bold ${statusClass}">
-                            ${a.tomada ? 'Tomada ✓' : (bloqueada ? 'Bloqueada ($)' : 'Marcar')}
-                        </button>
-                    </div>`;
+            <div class="flex items-center justify-between border-b border-gray-50 pb-3">
+                <div>
+                    <p class="font-bold text-sm">Clase ${i + 1} ${i < totalBase ? '(Base)' : '(Extra)'}</p>
+                    <p class="text-[10px] text-gray-400">${a.tomada ? 'Tomada ✓' : 'Pendiente'}</p>
+                </div>
+                <button 
+                    ${(!a.tomada && !bloqueada) ? `onclick="window.app.checkIn('${aluId}', '${aid}')"` : ''}
+                    class="px-4 py-2 rounded-lg text-xs font-bold ${statusClass}">
+                    ${a.tomada ? 'Tomada ✓' : (bloqueada ? 'Bloqueada ($)' : 'Marcar')}
+                </button>
+            </div>`;
     }).join('')}
             </div>
         </div>
@@ -607,7 +610,14 @@ document.getElementById('register-pago-form').addEventListener('submit', async e
             const fv = new Date(); fv.setDate(fv.getDate() + 30);
             const pRef = push(ref(db, 'pagos_tipo_a'));
             await set(pRef, { alumnoId: alu, monto, faltante, concepto: c, fechaCreacion: new Date().toISOString(), fechaVencimiento: fv.toISOString(), clasesExtra: 0, medioPago: medio, observaciones });
-            for (let i = 0; i < 3; i++) push(ref(db, `asistencias/${alu}`), { pagoId: pRef.key, tomada: false });
+            for (let i = 0; i < numClasesBase; i++) {
+                await push(ref(db, `asistencias/${alu}`), { 
+                    pagoId: pRef.key, 
+                    tomada: false,
+                    tipo: 'base' 
+                });
+            }
+            alert(`Mensualidad de ${numClasesBase} clases registrada.`);
 
         } else if (c === 'clases_extra') {
             const pId = document.getElementById('pago-id-select').value;
