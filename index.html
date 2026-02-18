@@ -245,13 +245,15 @@
     <div id="finanzas-view" class="hidden-view flex flex-col min-h-screen bg-gray-50 pb-20">
         <header class="bg-white p-4 border-b sticky top-0 z-30 flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <button onclick="window.app.changeView('dashboard-view')"
-                    class="material-symbols-outlined text-accent">arrow_back</button>
-                <h1 class="text-xl font-bold">Finanzas</h1>
+                <button onclick="window.app.changeView('dashboard-view')" class="material-symbols-outlined text-accent">arrow_back</button>
+                <h1 class="text-xl font-bold text-slate-800">Finanzas</h1>
             </div>
+            
             <div class="flex gap-2">
-                <select id="finanzas-mes" class="text-sm border-none bg-gray-100 rounded-lg p-1"></select>
-                <select id="finanzas-anio" class="text-sm border-none bg-gray-100 rounded-lg p-1"></select>
+                <select id="finanzas-mes" class="bg-gray-100 text-slate-800 text-xs font-bold rounded-lg px-2 py-1 border border-gray-200 outline-none">
+                    </select>
+                <select id="finanzas-anio" class="bg-gray-100 text-slate-800 text-xs font-bold rounded-lg px-2 py-1 border border-gray-200 outline-none">
+                    </select>
             </div>
         </header>
 
