@@ -211,6 +211,19 @@ async function openProfile(aluId, s, pKey, pData) {
         pKey = Object.keys(pagos).find(k => pagos[k].alumnoId === aluId && new Date(pagos[k].fechaVencimiento) > hoy);
         pData = pagos[pKey];
     }
+    // --- NUEVO CÁLCULO DE DÍAS RESTANTES ---
+    let diasRestantesTxt = "Sin mensualidad activa";
+    let badgeClass = "bg-red-50 text-red-500"; 
+
+    if (pKey && pData && pData.fechaVencimiento) {
+        const hoy = new Date();
+        const vencimiento = new Date(pData.fechaVencimiento);
+        const dias = Math.ceil((vencimiento - hoy) / (1000 * 60 * 60 * 24));
+        
+        diasRestantesTxt = `Vence en ${dias} día${dias !== 1 ? 's' : ''}`;
+        badgeClass = dias <= 5 ? "bg-orange-50 text-orange-600" : "bg-green-50 text-green-600";
+    }
+    // ----------------------------------------
 
     window.app.changeView('profile-view');
     const container = document.getElementById('profile-content');
@@ -224,6 +237,11 @@ async function openProfile(aluId, s, pKey, pData) {
             <div class="size-20 bg-primary/10 rounded-full flex items-center justify-center text-primary text-3xl font-bold mb-4">${s.nombre[0]}${s.apellidos ? s.apellidos[0] : ''}</div>
             <h2 class="text-xl font-bold">${s.nombre} ${s.apellidos || ''}</h2>
             <p class="text-xs text-gray-500 mb-4">ID Pago: ${pKey ? '#' + pKey.slice(-6) : '-'}</p>
+            <div class="mb-4">
+                <span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${badgeClass}">
+                    ${diasRestantesTxt}
+                </span>
+            </div>
             <div class="flex gap-4 w-full">
                 <a href="tel:${s.contacto || '#'}" class="flex-1 py-3 bg-primary text-white rounded-xl text-center font-bold">Llamar</a>
                 <button class="flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold">Mensaje</button>
