@@ -75,13 +75,22 @@
 
     <div id="dashboard-view" class="hidden-view flex flex-col min-h-screen artistic-gradient/50">
         <header
-            class="bg-white/90 backdrop-blur-md px-4 py-4 flex items-center justify-between border-b sticky top-0 z-30">
+            class="bg-white/90 backdrop-blur-md px-4 py-4 flex items-center justify-between border-b sticky top-0 z-30 relative">
             <div class="flex items-center gap-2">
                 <div class="size-8 rounded-full bg-gray-200"></div>
                 <h1 class="text-lg font-bold">¡Hola, Lauris!</h1>
             </div>
-            <span class="material-symbols-outlined text-gray-500">notifications</span>
+            <button id="notif-btn" onclick="window.app.toggleNotifDrawer()" class="relative p-1">
+                <span class="material-symbols-outlined text-gray-500">notifications</span>
+                <span id="notif-badge" class="hidden-view absolute -top-0.5 -right-0.5 size-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center"></span>
+            </button>
         </header>
+
+        <!-- Drawer de notificaciones -->
+        <div id="notif-drawer" class="hidden-view absolute top-[65px] left-0 right-0 z-20 bg-white border-b border-gray-100 shadow-lg px-4 py-3 space-y-2">
+            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Próximos a vencer</p>
+            <div id="notif-list"></div>
+        </div>
 
         <main class="p-4 space-y-6">
             <section>
