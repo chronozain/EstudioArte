@@ -105,6 +105,7 @@ async function loadActiveStudents() {
     const hoy = new Date();
     const pagosA = pagosASnap.val() || {};
     const asistencias = asistSnap.val() || {};
+    const alertas = []; // Para notificaciones
 
     Object.entries(aluSnap.val()).forEach(([id, s]) => {
         const pagoKey = Object.keys(pagosA).find(k => pagosA[k].alumnoId === id && new Date(pagosA[k].fechaVencimiento) > hoy);
@@ -114,6 +115,10 @@ async function loadActiveStudents() {
             const aluAsist = asistencias[id] ? Object.values(asistencias[id]).filter(a => a.pagoId === pagoKey) : [];
             const disponibles = aluAsist.filter(a => !a.tomada).length;
             const saldoTxt = p.faltante > 0 ? `<span class="text-red-500 font-bold">$${p.faltante}</span>` : `<span class="text-green-600 font-bold">Pagado ✓</span>`;
+
+            // Calcular días restantes para notificaciones
+            const dias = Math.ceil((new Date(p.fechaVencimiento) - hoy) / (1000 * 60 * 60 * 24));
+            if (dias <= 5) alertas.push({ nombre: `${s.nombre} ${s.apellidos || ''}`, dias });
 
             const card = document.createElement('div');
             card.className = "bg-white p-4 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer";
@@ -134,7 +139,57 @@ async function loadActiveStudents() {
             container.appendChild(card);
         }
     });
+
+    // Actualizar badge y contenido del drawer
+    updateNotifDrawer(alertas);
 }
+
+function updateNotifDrawer(alertas) {
+    const badge = document.getElementById('notif-badge');
+    const list = document.getElementById('notif-list');
+    if (!badge || !list) return;
+
+    if (alertas.length === 0) {
+        badge.classList.add('hidden-view');
+        list.innerHTML = `
+            <div class="flex items-center gap-2 py-2 text-green-600">
+                <span class="material-symbols-outlined text-sm">check_circle</span>
+                <p class="text-sm font-bold">Todo al día ✓</p>
+            </div>`;
+    } else {
+        badge.textContent = alertas.length;
+        badge.classList.remove('hidden-view');
+        list.innerHTML = alertas
+            .sort((a, b) => a.dias - b.dias)
+            .map(a => {
+                const urgente = a.dias <= 2;
+                return `
+                <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-base ${urgente ? 'text-red-400' : 'text-orange-400'}">schedule</span>
+                        <p class="text-sm font-bold text-slate-700">${a.nombre}</p>
+                    </div>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${urgente ? 'bg-red-50 text-red-500' : 'bg-orange-50 text-orange-500'}">
+                        ${a.dias === 1 ? 'Vence mañana' : `${a.dias} días`}
+                    </span>
+                </div>`;
+            }).join('');
+    }
+}
+
+window.app.toggleNotifDrawer = () => {
+    const drawer = document.getElementById('notif-drawer');
+    if (drawer) drawer.classList.toggle('hidden-view');
+};
+
+// Cerrar drawer al hacer clic fuera
+document.addEventListener('click', (e) => {
+    const drawer = document.getElementById('notif-drawer');
+    const btn = document.getElementById('notif-btn');
+    if (drawer && btn && !drawer.contains(e.target) && !btn.contains(e.target)) {
+        drawer.classList.add('hidden-view');
+    }
+});
 
 // 2. Lista completa alumnos
 function loadFullStudents(filter = '') {
