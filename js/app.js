@@ -229,8 +229,12 @@ async function openProfile(aluId, s, pKey, pData) {
     const container = document.getElementById('profile-content');
     const asistSnap = await get(ref(db, `asistencias/${aluId}`));
     const asistencias = asistSnap.exists() ? Object.entries(asistSnap.val()).filter(([aid, a]) => a.pagoId === pKey) : [];
-    const pagosBSnap = await get(ref(db, 'pagos_tipo_b'));
-    const pagosB = pagosBSnap.exists() ? Object.entries(pagosBSnap.val()).filter(([k, b]) => b.alumnoId === aluId) : [];
+    const todasAsistencias = asistSnap.exists() ? Object.values(asistSnap.val()) : [];
+    const pagosASnap = await get(ref(db, 'pagos_tipo_a'));
+    const hoyHist = new Date();
+    const historial = pagosASnap.exists()
+        ? Object.entries(pagosASnap.val()).filter(([k, p]) => p.alumnoId === aluId && new Date(p.fechaVencimiento) < hoyHist && k !== pKey)
+        : [];
 
     container.innerHTML = `
         <div class="bg-white rounded-3xl p-6 shadow-sm flex flex-col items-center">
@@ -274,19 +278,35 @@ async function openProfile(aluId, s, pKey, pData) {
         </div>
 
         <div class="bg-white rounded-2xl p-4 shadow-sm">
-            <h3 class="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">Actividades Extra (Tipo B)</h3>
-            ${pagosB.length === 0 ? '<p class="text-sm text-gray-500">No hay actividades extra registradas.</p>' : `
-            <div class="space-y-3">
-                ${pagosB.map(([k, b]) => `
-                    <div class="flex items-center justify-between border-b border-gray-50 pb-3">
-                        <div>
-                            <p class="font-bold text-sm">${b.descripcion || 'Actividad'} - $${b.monto}</p>
-                            <p class="text-[10px] text-gray-400">${b.fecha ? new Date(b.fecha).toLocaleDateString() : ''} ${b.medioPago ? '· ' + b.medioPago : ''}</p>
-                            ${b.observaciones ? `<p class="text-[10px] text-gray-400">Notas: ${b.observaciones}</p>` : ''}
-                        </div>
-                        <div class="text-xs text-gray-500">ID: ${k.slice(-6)}</div>
-                    </div>
-                `).join('')}
+            <h3 class="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">Historial de Pagos</h3>
+            ${historial.length === 0 ? '<p class="text-sm text-gray-500">No hay pagos anteriores registrados.</p>' : `
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs">
+                    <thead>
+                        <tr class="border-b border-gray-100">
+                            <th class="text-left text-gray-400 font-bold pb-2 pr-3">ID</th>
+                            <th class="text-left text-gray-400 font-bold pb-2 pr-3">Monto</th>
+                            <th class="text-left text-gray-400 font-bold pb-2 pr-3">Clases tomadas</th>
+                            <th class="text-left text-gray-400 font-bold pb-2">Venció</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        ${historial
+                            .sort((a, b) => new Date(b[1].fechaVencimiento) - new Date(a[1].fechaVencimiento))
+                            .map(([k, p]) => {
+                                const clasesTomadas = todasAsistencias.filter(a => a.pagoId === k && a.tomada).length;
+                                return `
+                                <tr>
+                                    <td class="py-2 pr-3 font-mono text-gray-500">#${k.slice(-6)}</td>
+                                    <td class="py-2 pr-3 font-bold text-slate-700">$${p.monto}</td>
+                                    <td class="py-2 pr-3">
+                                        <span class="bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-full">${clasesTomadas} clases</span>
+                                    </td>
+                                    <td class="py-2 text-gray-400">${new Date(p.fechaVencimiento).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                                </tr>`;
+                            }).join('')}
+                    </tbody>
+                </table>
             </div>
             `}
         </div>
