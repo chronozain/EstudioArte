@@ -320,7 +320,7 @@ async function openProfile(aluId, s, pKey, pData) {
                         <div class="flex items-center justify-between border-b border-gray-50 pb-3">
                             <div>
                                 <p class="font-bold text-sm">Clase ${i + 1} ${i < totalBase ? '(Base)' : '(Extra)'}</p>
-                                <p class="text-[10px] text-gray-400">${a.tomada ? 'Tomada ✓' : 'Pendiente'}</p>
+                                <p class="text-[10px] text-gray-400">${a.tomada ? `Tomada ✓ - ${new Date(a.fechaTomada).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}` : 'Pendiente'}</p>
                             </div>
                             <button 
                                 ${(!a.tomada && !bloqueada) ? `onclick="window.app.checkIn('${aluId}', '${aid}')"` : ''}
@@ -729,3 +729,4 @@ document.getElementById('add-student-form')?.addEventListener('submit', async e 
 
 // Inicialización
 refreshData();
+
