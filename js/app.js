@@ -378,31 +378,29 @@ window.app.checkIn = async (aluId, aid) => {
 };
 
 // --- FINANZAS ---
-async function cargarFinanzas(mes, anio) {
-    // ... (mantengo la función original por ahora, si necesitas ajustes avísame)
-    // Por simplicidad la dejo como estaba en tu código original
-    // Si quieres que la corrija también, dime y la actualizo completa
-}
-
+// --- FINANZAS ---
 function initFinanzasFilters() {
     const mesSel = document.getElementById('finanzas-mes');
     const anioSel = document.getElementById('finanzas-anio');
-    
-    if(!mesSel || !anioSel) return;
+    if (!mesSel || !anioSel) return;
+
+    // Evitar listeners duplicados si refreshData() se llama varias veces
+    if (mesSel.dataset.initialized) return;
+    mesSel.dataset.initialized = 'true';
 
     mesSel.innerHTML = '';
     anioSel.innerHTML = '';
 
-    const meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    const meses = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
     const hoy = new Date();
 
     meses.forEach((m, i) => {
         const opt = new Option(m, i);
-        if(i === hoy.getMonth()) opt.selected = true;
+        if (i === hoy.getMonth()) opt.selected = true;
         mesSel.add(opt);
     });
 
-    for(let a = hoy.getFullYear(); a >= 2024; a--) {
+    for (let a = hoy.getFullYear(); a >= 2024; a--) {
         const opt = new Option(a, a);
         anioSel.add(opt);
     }
@@ -411,6 +409,272 @@ function initFinanzasFilters() {
         cargarFinanzas(mesSel.value, anioSel.value);
     }));
 }
+
+async function cargarFinanzas(mes, anio) {
+    const mesNum  = parseInt(mes);
+    const anioNum = parseInt(anio);
+
+    // Mostrar estado de carga
+    document.getElementById('total-ingresos').textContent   = '...';
+    document.getElementById('total-deuda').textContent      = '...';
+    document.getElementById('res-mensualidades').textContent = '...';
+    document.getElementById('res-clases-extra').textContent  = '...';
+    document.getElementById('res-tipo-b').textContent        = '...';
+    document.getElementById('lista-historial-finanzas').innerHTML =
+        '<p class="text-sm text-gray-400 text-center py-4">Cargando...</p>';
+
+    // ── Leer Firebase ──────────────────────────────────────────────
+    const [pagosASnap, pagosBSnap, asistSnap, alumnosSnap] = await Promise.all([
+        get(ref(db, 'pagos_tipo_a')),
+        get(ref(db, 'pagos_tipo_b')),
+        get(ref(db, 'asistencias')),
+        get(ref(db, 'alumnos'))
+    ]);
+
+    const pagosA    = pagosASnap.exists()   ? pagosASnap.val()   : {};
+    const pagosB    = pagosBSnap.exists()   ? pagosBSnap.val()   : {};
+    const asistAll  = asistSnap.exists()    ? asistSnap.val()    : {};
+    const alumnos   = alumnosSnap.exists()  ? alumnosSnap.val()  : {};
+
+    // ── Helpers ────────────────────────────────────────────────────
+    const esMismoMes = (fechaISO) => {
+        if (!fechaISO) return false;
+        const d = new Date(fechaISO);
+        return d.getMonth() === mesNum && d.getFullYear() === anioNum;
+    };
+
+    const fmt = (n) => '$' + parseFloat(n || 0).toFixed(2);
+
+    // ── Clasificar IDs tipo A ──────────────────────────────────────
+    // Regla: su fechaVencimiento cae en el mes consultado
+    const idsA = Object.entries(pagosA)
+        .filter(([, p]) => esMismoMes(p.fechaVencimiento))
+        .map(([id, p]) => {
+            const alu = alumnos[p.alumnoId] || {};
+            const asistAlumno = asistAll[p.alumnoId]
+                ? Object.values(asistAll[p.alumnoId]).filter(a => a.pagoId === id)
+                : [];
+            const clasesTomadas  = asistAlumno.filter(a => a.tomada).length;
+            const clasesTotal    = asistAlumno.length;
+            const monto          = parseFloat(p.monto   || 0);
+            const faltante       = parseFloat(p.faltante || 0);
+            const ingreso        = monto - faltante;
+            // Separar monto base vs extra acumulado
+            const montoBase      = parseFloat(p.monto || 0) - (parseFloat(p.clasesExtra || 0) * 0); // monto ya incluye extras
+            const montoExtra     = 0; // No hay campo separado; se refleja en observaciones
+
+            return {
+                id, tipo: 'A',
+                alumnoNombre: `${alu.nombre || ''} ${alu.apellidos || ''}`.trim(),
+                alumnoId: p.alumnoId,
+                monto, faltante, ingreso,
+                clasesTomadas, clasesTotal,
+                clasesBase:  p.clasesBase  || 0,
+                clasesExtra: p.clasesExtra || 0,
+                fechaVencimiento: p.fechaVencimiento,
+                fechaCreacion:    p.fechaCreacion,
+                medioPago:    p.medioPago   || '-',
+                observaciones: p.observaciones || '',
+                concepto: p.concepto || 'mensualidad',
+                raw: p
+            };
+        });
+
+    // ── Clasificar IDs tipo B ──────────────────────────────────────
+    // Regla: su último movimiento (abono) cae en el mes consultado.
+    // El "último movimiento" se extrae del campo observaciones donde
+    // se registran los abonos como "[Abono: $X - dd/mm/yyyy]",
+    // o bien la fecha de creación si nunca tuvo abonos.
+    const extraerUltimoAbonoFecha = (p) => {
+        if (!p.observaciones) return p.fecha || null;
+        // Buscar todas las fechas de abono en observaciones: "[Abono: $X - d/m/yyyy]"
+        const regex = /\[Abono:.*?-\s*(\d{1,2}\/\d{1,2}\/\d{4})\]/g;
+        let match, ultimaFecha = null;
+        while ((match = regex.exec(p.observaciones)) !== null) {
+            // Convertir d/m/yyyy a Date
+            const partes = match[1].split('/');
+            const d = new Date(`${partes[2]}-${partes[1].padStart(2,'0')}-${partes[0].padStart(2,'0')}`);
+            if (!ultimaFecha || d > ultimaFecha) ultimaFecha = d;
+        }
+        // Si no hay abonos en observaciones, usar fecha de creación
+        if (!ultimaFecha && p.fecha) ultimaFecha = new Date(p.fecha);
+        return ultimaFecha;
+    };
+
+    const idsB = Object.entries(pagosB)
+        .filter(([, p]) => {
+            const ultima = extraerUltimoAbonoFecha(p);
+            if (!ultima) return false;
+            return ultima.getMonth() === mesNum && ultima.getFullYear() === anioNum;
+        })
+        .map(([id, p]) => {
+            const ultima   = extraerUltimoAbonoFecha(p);
+            const monto    = parseFloat(p.monto    || 0);
+            const faltante = parseFloat(p.faltante || 0);
+            const ingreso  = monto - faltante;
+            return {
+                id, tipo: 'B',
+                descripcion:   p.descripcion   || 'Actividad Extra',
+                monto, faltante, ingreso,
+                medioPago:     p.medioPago     || '-',
+                observaciones: p.observaciones || '',
+                fechaUltimoMovimiento: ultima ? ultima.toISOString() : null,
+                fechaCreacion: p.fecha || null,
+                raw: p
+            };
+        });
+
+    const todosIds = [...idsA, ...idsB];
+
+    // ── Calcular totales ───────────────────────────────────────────
+    let totalIngresos     = 0;
+    let totalDeuda        = 0;
+    let totalMensualidades = 0;
+    let totalClasesExtra   = 0;
+    let totalTipoB         = 0;
+
+    idsA.forEach(r => {
+        totalIngresos += r.ingreso;
+        totalDeuda    += r.faltante;
+        // Separar mensualidad base de clases extra dentro del monto
+        // Como el monto acumulado no tiene campo separado, usamos observaciones
+        // para detectar si hubo clases extra sumadas
+        if ((r.clasesExtra || 0) > 0 && r.observaciones.includes('[+')) {
+            // Estimación: clases extra = clasesExtra * (monto / clasesTotal)
+            const precioPorClase = r.clasesTotal > 0 ? r.monto / r.clasesTotal : 0;
+            const montoExtra     = precioPorClase * r.clasesExtra;
+            totalClasesExtra    += montoExtra - (montoExtra * (r.faltante / r.monto));
+            totalMensualidades  += r.ingreso - (montoExtra - (montoExtra * (r.faltante / r.monto)));
+        } else {
+            totalMensualidades += r.ingreso;
+        }
+    });
+
+    idsB.forEach(r => {
+        totalIngresos += r.ingreso;
+        totalDeuda    += r.faltante;
+        totalTipoB    += r.ingreso;
+    });
+
+    // ── Actualizar tarjetas resumen ────────────────────────────────
+    document.getElementById('total-ingresos').textContent    = fmt(totalIngresos);
+    document.getElementById('total-deuda').textContent       = fmt(totalDeuda);
+    document.getElementById('res-mensualidades').textContent  = fmt(totalMensualidades);
+    document.getElementById('res-clases-extra').textContent   = fmt(totalClasesExtra);
+    document.getElementById('res-tipo-b').textContent         = fmt(totalTipoB);
+
+    // ── Renderizar tabla ───────────────────────────────────────────
+    const contenedor = document.getElementById('lista-historial-finanzas');
+
+    if (todosIds.length === 0) {
+        contenedor.innerHTML = '<p class="text-sm text-gray-400 text-center py-6">No hay registros cerrados en este período.</p>';
+        return;
+    }
+
+    const filas = todosIds.map(r => {
+        const badgeTipo = r.tipo === 'A'
+            ? `<span class="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Tipo A</span>`
+            : `<span class="bg-purple-50 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Tipo B</span>`;
+
+        const badgeFaltante = r.faltante > 0
+            ? `<span class="text-red-500 font-bold">${fmt(r.faltante)}</span>`
+            : `<span class="text-green-600 font-bold">Liquidado ✓</span>`;
+
+        const clickAttr = r.tipo === 'A'
+            ? `onclick="window.app.abrirDetalleFinanzas('${r.id}')" style="cursor:pointer"`
+            : '';
+
+        const chevron = r.tipo === 'A'
+            ? `<span class="material-symbols-outlined text-gray-300 text-base">chevron_right</span>`
+            : `<span class="w-5"></span>`;
+
+        const nombre = r.tipo === 'A'
+            ? `<p class="font-bold text-sm text-slate-800">${r.alumnoNombre || 'Sin nombre'}</p>`
+            : `<p class="font-bold text-sm text-slate-800">${r.descripcion}</p>`;
+
+        const obs = r.observaciones
+            ? `<p class="text-[10px] text-gray-400 mt-0.5 line-clamp-1">${r.observaciones.replace(/\n/g, ' · ')}</p>`
+            : '';
+
+        return `
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between gap-3" ${clickAttr}>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        ${badgeTipo}
+                        <span class="font-mono text-[10px] text-gray-400">#${r.id.slice(-6)}</span>
+                    </div>
+                    ${nombre}
+                    <div class="flex gap-3 mt-1 flex-wrap">
+                        <span class="text-xs text-gray-500">Monto: <span class="font-bold text-slate-700">${fmt(r.monto)}</span></span>
+                        <span class="text-xs text-gray-500">Faltante: ${badgeFaltante}</span>
+                    </div>
+                    ${obs}
+                </div>
+                ${chevron}
+            </div>`;
+    }).join('');
+
+    contenedor.innerHTML = filas;
+}
+
+// Abrir detalle de ID tipo A desde finanzas (vista de solo lectura)
+window.app.abrirDetalleFinanzas = async (pagoId) => {
+    const [pagosASnap, alumnosSnap, asistSnap] = await Promise.all([
+        get(ref(db, 'pagos_tipo_a')),
+        get(ref(db, 'alumnos')),
+        get(ref(db, 'asistencias'))
+    ]);
+
+    const pagosA   = pagosASnap.val()  || {};
+    const alumnos  = alumnosSnap.val() || {};
+    const asistAll = asistSnap.val()   || {};
+
+    const pData = pagosA[pagoId];
+    if (!pData) return alert('No se encontró el registro.');
+
+    const alu    = alumnos[pData.alumnoId] || {};
+    const nombre = `${alu.nombre || ''} ${alu.apellidos || ''}`.trim() || 'Sin nombre';
+
+    const asistAlumno = asistAll[pData.alumnoId]
+        ? Object.entries(asistAll[pData.alumnoId]).filter(([, a]) => a.pagoId === pagoId)
+        : [];
+
+    const clasesBase  = pData.clasesBase  || 0;
+    const clasesExtra = pData.clasesExtra || 0;
+    const totalClases = clasesBase + clasesExtra;
+    const tomadas     = asistAlumno.filter(([, a]) => a.tomada).length;
+
+    const fmtFecha = (iso) => iso
+        ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '-';
+
+    const filasClases = asistAlumno.map(([, a], i) => {
+        const esTipo = i < clasesBase ? 'Base' : 'Extra';
+        const estado = a.tomada
+            ? `<span class="text-green-600 font-bold text-xs">Tomada ✓ ${fmtFecha(a.fechaTomada)}</span>`
+            : `<span class="text-gray-400 text-xs">Pendiente</span>`;
+        return `
+            <tr class="border-b border-gray-50">
+                <td class="py-2 text-xs text-gray-500">Clase ${i + 1}</td>
+                <td class="py-2"><span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${i < clasesBase ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}">${esTipo}</span></td>
+                <td class="py-2">${estado}</td>
+            </tr>`;
+    }).join('');
+
+    const modal = document.getElementById('modal-detalle-finanzas');
+    document.getElementById('detalle-fin-nombre').textContent    = nombre;
+    document.getElementById('detalle-fin-id').textContent        = '#' + pagoId.slice(-6);
+    document.getElementById('detalle-fin-monto').textContent     = '$' + parseFloat(pData.monto || 0).toFixed(2);
+    document.getElementById('detalle-fin-faltante').textContent  = '$' + parseFloat(pData.faltante || 0).toFixed(2);
+    document.getElementById('detalle-fin-vencio').textContent    = fmtFecha(pData.fechaVencimiento);
+    document.getElementById('detalle-fin-creado').textContent    = fmtFecha(pData.fechaCreacion);
+    document.getElementById('detalle-fin-medio').textContent     = pData.medioPago || '-';
+    document.getElementById('detalle-fin-clases-resumen').textContent = `${tomadas} de ${totalClases} (${clasesBase} base + ${clasesExtra} extra)`;
+    document.getElementById('detalle-fin-obs').textContent       = pData.observaciones || 'Sin observaciones';
+    document.getElementById('detalle-fin-tabla-clases').innerHTML = filasClases;
+
+    modal.classList.remove('hidden-view');
+};
 
 // --- PAGOS ---
 function resetPagoForm() {
@@ -729,4 +993,3 @@ document.getElementById('add-student-form')?.addEventListener('submit', async e 
 
 // Inicialización
 refreshData();
-
