@@ -267,22 +267,20 @@
                 </div>
                 <span class="material-symbols-outlined text-gray-400">query_stats</span>
             </div>
-
             <div class="px-4 pb-3 flex gap-3">
                 <div class="flex-1">
                     <label class="text-[10px] uppercase font-bold text-gray-400 block mb-1 ml-1">Mes</label>
-                    <select id="finanzas-mes" class="w-full bg-gray-100 text-slate-800 text-sm font-semibold rounded-xl px-3 py-2 border border-gray-200 outline-none focus:ring-2 focus:ring-accent/20">
-                    </select>
+                    <select id="finanzas-mes" class="w-full bg-gray-100 text-slate-800 text-sm font-semibold rounded-xl px-3 py-2 border border-gray-200 outline-none focus:ring-2 focus:ring-accent/20"></select>
                 </div>
                 <div class="w-1/3">
                     <label class="text-[10px] uppercase font-bold text-gray-400 block mb-1 ml-1">Año</label>
-                    <select id="finanzas-anio" class="w-full bg-gray-100 text-slate-800 text-sm font-semibold rounded-xl px-3 py-2 border border-gray-200 outline-none focus:ring-2 focus:ring-accent/20">
-                    </select>
+                    <select id="finanzas-anio" class="w-full bg-gray-100 text-slate-800 text-sm font-semibold rounded-xl px-3 py-2 border border-gray-200 outline-none focus:ring-2 focus:ring-accent/20"></select>
                 </div>
             </div>
         </header>
-
+    
         <main class="p-4 space-y-6">
+            <!-- Tarjetas resumen -->
             <section class="grid grid-cols-2 gap-4">
                 <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-green-500">
                     <p class="text-[10px] uppercase font-bold text-gray-400">Ingresos Reales</p>
@@ -293,28 +291,101 @@
                     <p id="total-deuda" class="text-xl font-bold text-slate-800">$0.00</p>
                 </div>
             </section>
-
+        
+            <!-- Desglose por concepto -->
             <section class="bg-white rounded-2xl p-4 shadow-sm">
                 <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-accent">analytics</span> Resumen del Mes
+                    <span class="material-symbols-outlined text-accent text-base">analytics</span> Resumen del Mes
                 </h3>
                 <div class="space-y-2 text-sm">
-                    <div class="flex justify-between"><span>Mensualidades (Cerradas):</span><span id="res-mensualidades"
-                            class="font-bold">$0.00</span></div>
-                    <div class="flex justify-between"><span>Clases Extra:</span><span id="res-clases-extra"
-                            class="font-bold">$0.00</span></div>
-                    <div class="flex justify-between"><span>Actividades B:</span><span id="res-tipo-b"
-                            class="font-bold">$0.00</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Mensualidades:</span><span id="res-mensualidades" class="font-bold">$0.00</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Clases Extra:</span><span id="res-clases-extra" class="font-bold">$0.00</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Actividades B:</span><span id="res-tipo-b" class="font-bold">$0.00</span></div>
                 </div>
             </section>
-
+        
+            <!-- Tabla de IDs -->
             <section>
-                <h3 class="text-sm font-bold text-gray-500 uppercase mb-3">IDs Cerrados e Ingresos Extra</h3>
-                <div id="lista-historial-finanzas" class="space-y-3">
-                </div>
+                <h3 class="text-sm font-bold text-gray-500 uppercase mb-3 tracking-widest">IDs del período</h3>
+                <div id="lista-historial-finanzas" class="space-y-3"></div>
             </section>
         </main>
     </div>
+    
+    <!-- Modal detalle ID tipo A (finanzas, solo lectura) -->
+    <div id="modal-detalle-finanzas" class="hidden-view fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
+                <h2 class="font-bold text-slate-800">Detalle de ID</h2>
+                <button onclick="document.getElementById('modal-detalle-finanzas').classList.add('hidden-view')"
+                    class="material-symbols-outlined text-gray-500">close</button>
+            </div>
+            <div class="overflow-y-auto p-6 space-y-5">
+                <!-- Encabezado alumno -->
+                <div class="flex items-center gap-4">
+                    <div class="size-14 rounded-full bg-primary/10 flex items-center justify-center text-primary text-2xl font-bold">
+                        <span class="material-symbols-outlined">person</span>
+                    </div>
+                    <div>
+                        <p id="detalle-fin-nombre" class="font-bold text-lg text-slate-800"></p>
+                        <p id="detalle-fin-id" class="text-xs text-gray-400 font-mono"></p>
+                    </div>
+                </div>
+            
+                <!-- Datos del pago -->
+                <div class="bg-gray-50 rounded-2xl p-4 space-y-3 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Monto total</span>
+                        <span id="detalle-fin-monto" class="font-bold text-slate-800"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Faltante</span>
+                        <span id="detalle-fin-faltante" class="font-bold text-red-500"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Medio de pago</span>
+                        <span id="detalle-fin-medio" class="font-bold text-slate-700"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Fecha creación</span>
+                        <span id="detalle-fin-creado" class="font-bold text-slate-700"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Fecha vencimiento</span>
+                        <span id="detalle-fin-vencio" class="font-bold text-slate-700"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Clases</span>
+                        <span id="detalle-fin-clases-resumen" class="font-bold text-slate-700"></span>
+                    </div>
+                </div>
+            
+                <!-- Tabla de asistencias -->
+                <div>
+                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Registro de clases</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs">
+                            <thead>
+                                <tr class="border-b border-gray-100">
+                                    <th class="text-left text-gray-400 font-bold pb-2 pr-3">Clase</th>
+                                    <th class="text-left text-gray-400 font-bold pb-2 pr-3">Tipo</th>
+                                    <th class="text-left text-gray-400 font-bold pb-2">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detalle-fin-tabla-clases"></tbody>
+                        </table>
+                    </div>
+                </div>
+            
+                <!-- Observaciones -->
+                <div>
+                    <h4 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Observaciones</h4>
+                    <p id="detalle-fin-obs" class="text-sm text-gray-600 whitespace-pre-line bg-gray-50 rounded-xl p-3"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
     <!-- Perfil -->
     <div id="profile-view" class="hidden-view fixed inset-0 z-40 bg-gray-50 overflow-y-auto pb-10">
