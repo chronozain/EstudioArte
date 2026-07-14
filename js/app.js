@@ -456,16 +456,14 @@ async function openProfile(aluId) {
             <div class="size-20 bg-primary/10 rounded-full flex items-center justify-center text-primary text-3xl font-bold mb-4">${s.nombre[0]}${s.apellidos ? s.apellidos[0] : ''}</div>
             <h2 class="text-xl font-bold">${s.nombre} ${s.apellidos || ''}</h2>
             <p class="text-xs text-gray-500 mb-4">${(!mKey && !pkKey) ? 'Sin plan activo' : ''}</p>
-
-        ${renderBloquePlan(mKey, mData, 'Mensualidad Activa')}
-        ${renderBloquePlan(pkKey, pkData, 'Paquete Activo')}
-
-            
             <div class="flex gap-4 w-full">
                 <a href="tel:${s.contacto || '#'}" class="flex-1 py-3 bg-primary text-white rounded-xl text-center font-bold">Llamar</a>
                 <button class="flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold">Mensaje</button>
             </div>
         </div>
+
+        ${renderBloquePlan(mKey, mData, 'Mensualidad Activa')}
+        ${renderBloquePlan(pkKey, pkData, 'Paquete Activo')}
 
         <div class="bg-white rounded-2xl p-4 shadow-sm">
             <h3 class="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">Historial de Pagos</h3>
