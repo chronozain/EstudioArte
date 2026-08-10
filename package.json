@@ -1,0 +1,14 @@
+{
+  "name": "escuela-de-arte",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "echo 'No build needed for static Express app'",
+    "lint": "echo 'No lint script configured'",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

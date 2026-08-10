@@ -1,0 +1,6 @@
+{
+  "name": "Escuela de Arte Mi Chula",
+  "description": "Gestión académica y financiera para Escuela de Arte Mi Chula: alumnos, cobros, asistencias, paquetes de clases y reportes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
