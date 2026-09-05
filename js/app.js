@@ -421,17 +421,23 @@ window.app.switchDashboardTab = (tab) => {
 };
 
 // 1. Alumnos activos (mensualidad)
+let loadActiveStudentsSeq = 0;
+
 async function loadActiveStudents(filter = '') {
+    const seq = ++loadActiveStudentsSeq;
+    const container = document.getElementById('active-students-list');
+    if (!container) return;
+
     const [aluSnap, pagosASnap, asistSnap] = await Promise.all([
         safeGet('alumnos'),
         safeGet('pagos_tipo_a'),
         safeGet('asistencias')
     ]);
 
-    const container = document.getElementById('active-students-list');
-    if (!container) return;
-    container.innerHTML = '';
+    if (seq !== loadActiveStudentsSeq) return;
+
     if (!aluSnap.exists()) {
+        container.innerHTML = '<p class="text-xs font-semibold text-slate-400 text-center py-6">No hay alumnos registrados.</p>';
         alertasMensualidadCache = [];
         renderNotifDrawer();
         return;
@@ -441,21 +447,38 @@ async function loadActiveStudents(filter = '') {
     const pagosA = pagosASnap.val() || {};
     const asistencias = asistSnap.val() || {};
     const alertas = [];
-    let matchCount = 0;
+    const cards = [];
 
-    Object.entries(aluSnap.val()).forEach(([id, s]) => {
+    // Limpiar pagos gemelos en pagos_tipo_a si existieran
+    const mensEntries = Object.entries(pagosA);
+    for (const [id, m] of mensEntries) {
+        if (id.startsWith('id_') && m && m.alumnoId) {
+            const tieneGemelo = mensEntries.some(([otroId, otroM]) =>
+                otroId !== id &&
+                otroM.alumnoId === m.alumnoId &&
+                otroM.fechaCreacion === m.fechaCreacion
+            );
+            if (tieneGemelo) {
+                delete pagosA[id];
+                await safeRemove(`pagos_tipo_a/${id}`);
+            }
+        }
+    }
+
+    const alumnosObj = aluSnap.val();
+    for (const [id, s] of Object.entries(alumnosObj)) {
         const fullName = `${s.nombre || ''} ${s.apellidos || ''}`.trim();
-        if (filter && !fullName.toLowerCase().includes(filter.toLowerCase())) return;
+        if (filter && !fullName.toLowerCase().includes(filter.toLowerCase())) continue;
 
         const pagoKey = Object.keys(pagosA).find(k => pagosA[k].alumnoId === id && new Date(pagosA[k].fechaVencimiento) > hoy);
-
         if (pagoKey) {
-            matchCount++;
             const p = pagosA[pagoKey];
             const maxMens = parseInt((p.clasesBase || 4) + (p.clasesExtra || 0));
             if (asistencias[id]) {
-                sanitizeAsistenciasForPago(id, pagoKey, maxMens, asistencias[id]);
+                await sanitizeAsistenciasForPago(id, pagoKey, maxMens, asistencias[id]);
             }
+            if (seq !== loadActiveStudentsSeq) return;
+
             const aluAsist = asistencias[id] ? Object.values(asistencias[id]).filter(a => a.pagoId === pagoKey) : [];
             const disponibles = Math.min(maxMens, aluAsist.filter(a => !a.tomada).length);
             const saldoTxt = p.faltante > 0 ? `<span class="text-red-500 font-bold">$${p.faltante}</span>` : `<span class="text-green-600 font-bold">Pagado ✓</span>`;
@@ -463,32 +486,35 @@ async function loadActiveStudents(filter = '') {
             const dias = Math.ceil((new Date(p.fechaVencimiento) - hoy) / (1000 * 60 * 60 * 24));
             if (dias <= 5) alertas.push({ nombre: fullName, dias });
 
-            const card = document.createElement('div');
-            card.className = "bg-white p-4 rounded-2xl shadow-xs border border-slate-200/70 flex items-center justify-between cursor-pointer hover:border-teal-300 hover:shadow-sm active:scale-[0.99] transition-all";
-            card.onclick = () => openProfile(id);
-            card.innerHTML = `
-                <div class="flex items-center gap-3.5">
-                    <div class="size-11 rounded-full bg-gradient-to-tr from-teal-500 to-indigo-500 p-0.5 shadow-xs shrink-0 flex items-center justify-center">
-                        <div class="w-full h-full bg-white rounded-full flex items-center justify-center font-extrabold text-teal-700 text-sm">
-                            ${s.nombre ? s.nombre[0] : 'A'}${s.apellidos ? s.apellidos[0] : ''}
+            cards.push(`
+                <div class="bg-white p-4 rounded-2xl shadow-xs border border-slate-200/70 flex items-center justify-between cursor-pointer hover:border-teal-300 hover:shadow-sm active:scale-[0.99] transition-all"
+                    onclick="window.app.openProfile('${id}')">
+                    <div class="flex items-center gap-3.5">
+                        <div class="size-11 rounded-full bg-gradient-to-tr from-teal-500 to-indigo-500 p-0.5 shadow-xs shrink-0 flex items-center justify-center">
+                            <div class="w-full h-full bg-white rounded-full flex items-center justify-center font-extrabold text-teal-700 text-sm">
+                                ${s.nombre ? s.nombre[0] : 'A'}${s.apellidos ? s.apellidos[0] : ''}
+                            </div>
+                        </div>
+                        <div>
+                            <p class="font-bold text-slate-900 text-sm">${fullName}</p>
+                            <div class="flex gap-2 text-[10px] font-bold tracking-tight mt-1">
+                                <span class="bg-teal-50 text-teal-700 px-2.5 py-0.5 rounded-full">${disponibles} Clases Disp.</span>
+                                <span class="bg-slate-50 border border-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full">Saldo: ${saldoTxt}</span>
+                            </div>
                         </div>
                     </div>
-                    <div>
-                        <p class="font-bold text-slate-900 text-sm">${fullName}</p>
-                        <div class="flex gap-2 text-[10px] font-bold tracking-tight mt-1">
-                            <span class="bg-teal-50 text-teal-700 px-2.5 py-0.5 rounded-full">${disponibles} Clases Disp.</span>
-                            <span class="bg-slate-50 border border-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full">Saldo: ${saldoTxt}</span>
-                        </div>
-                    </div>
+                    <span class="material-symbols-outlined text-slate-300 text-xl">chevron_right</span>
                 </div>
-                <span class="material-symbols-outlined text-slate-300 text-xl">chevron_right</span>
-            `;
-            container.appendChild(card);
+            `);
         }
-    });
+    }
 
-    if (matchCount === 0) {
+    if (seq !== loadActiveStudentsSeq) return;
+
+    if (cards.length === 0) {
         container.innerHTML = `<p class="text-xs font-semibold text-slate-400 text-center py-6">No hay alumnos con mensualidad activa ${filter ? 'que coincidan' : ''}.</p>`;
+    } else {
+        container.innerHTML = cards.join('');
     }
 
     alertasMensualidadCache = alertas;
@@ -517,7 +543,11 @@ async function sanitizeAsistenciasForPago(aluId, pagoId, maxAllowed, asistencias
 }
 
 // 1B. Alumnos con paquete activo
+let loadActivePaquetesSeq = 0;
+
 async function loadActivePaquetes(filter = '') {
+    const seq = ++loadActivePaquetesSeq;
+
     const containers = [
         document.getElementById('active-paquetes-list'),
         document.getElementById('dashboard-paquetes-list')
@@ -531,7 +561,7 @@ async function loadActivePaquetes(filter = '') {
         safeGet('alumnos')
     ]);
 
-    containers.forEach(c => c.innerHTML = '');
+    if (seq !== loadActivePaquetesSeq) return;
 
     const paquetes = paqSnap.exists() ? paqSnap.val() : {};
     const asistencias = asistSnap.exists() ? asistSnap.val() : {};
@@ -539,7 +569,23 @@ async function loadActivePaquetes(filter = '') {
     const hoy = new Date();
     const alertas = [];
 
-    // Sanear asistencias duplicadas en paquetes
+    // 1. Limpiar paquetes gemelos creados por el bug de safePush (id_... vs -...)
+    const paqEntries = Object.entries(paquetes);
+    for (const [id, p] of paqEntries) {
+        if (id.startsWith('id_') && p && p.alumnoId) {
+            const tieneGemelo = paqEntries.some(([otroId, otroP]) =>
+                otroId !== id &&
+                otroP.alumnoId === p.alumnoId &&
+                otroP.fechaCreacion === p.fechaCreacion
+            );
+            if (tieneGemelo) {
+                delete paquetes[id];
+                await safeRemove(`pagos_paquetes/${id}`);
+            }
+        }
+    }
+
+    // 2. Sanear asistencias duplicadas en paquetes
     for (const [id, p] of Object.entries(paquetes)) {
         if (p && p.alumnoId && asistencias[p.alumnoId]) {
             const maxBase = parseInt(p.clasesBase || p.tipoPaquete || 4);
@@ -547,17 +593,25 @@ async function loadActivePaquetes(filter = '') {
         }
     }
 
+    if (seq !== loadActivePaquetesSeq) return;
+
     const activos = Object.entries(paquetes).filter(([id, p]) => {
         if (new Date(p.fechaVencimiento) <= hoy) return false;
         const clases = asistencias[p.alumnoId] ? Object.values(asistencias[p.alumnoId]).filter(a => a.pagoId === id) : [];
         return clases.some(a => !a.tomada);
     });
 
-    let renderedCount = 0;
+    const cards = [];
+    const processedKeys = new Set();
 
     activos.forEach(([id, p]) => {
         const s = alumnos[p.alumnoId];
         if (!s) return;
+
+        // Clave única para evitar duplicación de tarjetas
+        const cardKey = p.alumnoId + '_' + id;
+        if (processedKeys.has(cardKey)) return;
+        processedKeys.add(cardKey);
 
         const fullName = `${s.nombre || ''} ${s.apellidos || ''}`.trim();
         if (filter && !fullName.toLowerCase().includes(filter.toLowerCase())) return;
@@ -570,13 +624,9 @@ async function loadActivePaquetes(filter = '') {
         const dias = Math.ceil((new Date(p.fechaVencimiento) - hoy) / (1000 * 60 * 60 * 24));
         if (dias <= 5) alertas.push({ nombre: fullName, dias });
 
-        renderedCount++;
-
-        containers.forEach(container => {
-            const card = document.createElement('div');
-            card.className = "bg-white p-4 rounded-2xl shadow-xs border border-slate-200/70 flex items-center justify-between cursor-pointer hover:border-purple-300 hover:shadow-sm active:scale-[0.99] transition-all";
-            card.onclick = () => openProfile(p.alumnoId);
-            card.innerHTML = `
+        cards.push(`
+            <div class="bg-white p-4 rounded-2xl shadow-xs border border-slate-200/70 flex items-center justify-between cursor-pointer hover:border-purple-300 hover:shadow-sm active:scale-[0.99] transition-all"
+                onclick="window.app.openProfile('${p.alumnoId}')">
                 <div class="flex items-center gap-3.5">
                     <div class="size-11 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 p-0.5 shadow-xs shrink-0 flex items-center justify-center">
                         <div class="w-full h-full bg-white rounded-full flex items-center justify-center font-extrabold text-purple-700 text-sm">
@@ -592,16 +642,20 @@ async function loadActivePaquetes(filter = '') {
                     </div>
                 </div>
                 <span class="material-symbols-outlined text-slate-300 text-xl">chevron_right</span>
-            `;
-            container.appendChild(card);
-        });
+            </div>
+        `);
     });
 
-    if (renderedCount === 0) {
-        containers.forEach(container => {
+    if (seq !== loadActivePaquetesSeq) return;
+
+    // Renderizado atómico en los contenedores
+    containers.forEach(container => {
+        if (cards.length === 0) {
             container.innerHTML = `<p class="text-xs font-semibold text-slate-400 text-center py-6">No hay paquetes activos ${filter ? 'que coincidan' : ''}.</p>`;
-        });
-    }
+        } else {
+            container.innerHTML = cards.join('');
+        }
+    });
 
     alertasPaqueteCache = alertas;
     renderNotifDrawer();
@@ -753,6 +807,22 @@ async function openProfile(aluId) {
     const pagosP = pagosPSnap.exists() ? pagosPSnap.val() : {};
     const todasAsistencias = asistSnap.exists() ? asistSnap.val() : {};
     const hoy = new Date();
+
+    // Limpiar paquetes gemelos creados por el bug de safePush (id_... vs -...)
+    const paqEntries = Object.entries(pagosP);
+    for (const [id, p] of paqEntries) {
+        if (id.startsWith('id_') && p && p.alumnoId === aluId) {
+            const tieneGemelo = paqEntries.some(([otroId, otroP]) =>
+                otroId !== id &&
+                otroP.alumnoId === aluId &&
+                otroP.fechaCreacion === p.fechaCreacion
+            );
+            if (tieneGemelo) {
+                delete pagosP[id];
+                await safeRemove(`pagos_paquetes/${id}`);
+            }
+        }
+    }
 
     // Sanear posibles asistencias duplicadas del alumno
     for (const [id, p] of Object.entries(pagosP)) {
@@ -958,6 +1028,7 @@ async function openProfile(aluId) {
     `;
 }
 
+window.app.openProfile = async (id) => openProfile(id);
 window.app.openQuickProfile = async (id) => openProfile(id);
 
 window.app.checkIn = async (aluId, aid) => {
