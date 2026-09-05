@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
-import { getDatabase, ref, push, set, onValue, update, get } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
+import { getDatabase, ref, push, set, onValue, update, get, remove } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyCdNroefbfgKJcKT5nR6UAcx1mckosqRM4",
@@ -183,26 +183,63 @@ async function safeUpdate(path, updObj) {
     }
 }
 
-async function safePush(path, val) {
-    const newKey = 'id_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-    const fullPath = `${path}/${newKey}`;
-
-    if (val !== undefined) {
-        await safeSet(fullPath, val);
+async function safeRemove(path) {
+    const ldb = getLocalDb();
+    const parts = path.split('/').filter(Boolean);
+    let curr = ldb;
+    for (let i = 0; i < parts.length - 1; i++) {
+        if (!curr[parts[i]]) {
+            curr = null;
+            break;
+        }
+        curr = curr[parts[i]];
+    }
+    if (curr && parts.length > 0) {
+        delete curr[parts[parts.length - 1]];
+        saveLocalDb(ldb);
     }
 
     if (db) {
         try {
+            await remove(ref(db, path));
+        } catch (e) {
+            console.warn(`Firebase remove failed for '${path}':`, e.message || e);
+        }
+    }
+}
+
+async function safePush(path, val) {
+    let finalKey = null;
+
+    if (db) {
+        try {
             const pRef = push(ref(db, path));
+            finalKey = pRef.key;
             if (val !== undefined) {
                 await set(pRef, val);
             }
-            return { key: pRef.key || newKey };
         } catch (e) {
             console.warn(`Firebase push failed for '${path}':`, e.message || e);
         }
     }
-    return { key: newKey };
+
+    if (!finalKey) {
+        finalKey = 'id_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    }
+
+    const ldb = getLocalDb();
+    const parts = path.split('/').filter(Boolean);
+    let curr = ldb;
+    for (const p of parts) {
+        if (!curr[p] || typeof curr[p] !== 'object') curr[p] = {};
+        curr = curr[p];
+    }
+    if (val !== undefined) {
+        curr[finalKey] = val;
+    }
+    saveLocalDb(ldb);
+
+    return { key: finalKey };
 }
 
 function safeOnValue(path, callback) {
@@ -415,8 +452,12 @@ async function loadActiveStudents(filter = '') {
         if (pagoKey) {
             matchCount++;
             const p = pagosA[pagoKey];
+            const maxMens = parseInt((p.clasesBase || 4) + (p.clasesExtra || 0));
+            if (asistencias[id]) {
+                sanitizeAsistenciasForPago(id, pagoKey, maxMens, asistencias[id]);
+            }
             const aluAsist = asistencias[id] ? Object.values(asistencias[id]).filter(a => a.pagoId === pagoKey) : [];
-            const disponibles = aluAsist.filter(a => !a.tomada).length;
+            const disponibles = Math.min(maxMens, aluAsist.filter(a => !a.tomada).length);
             const saldoTxt = p.faltante > 0 ? `<span class="text-red-500 font-bold">$${p.faltante}</span>` : `<span class="text-green-600 font-bold">Pagado ✓</span>`;
 
             const dias = Math.ceil((new Date(p.fechaVencimiento) - hoy) / (1000 * 60 * 60 * 24));
@@ -454,6 +495,27 @@ async function loadActiveStudents(filter = '') {
     renderNotifDrawer();
 }
 
+// Función para sanear asistencias duplicadas por el bug de doble inserción
+async function sanitizeAsistenciasForPago(aluId, pagoId, maxAllowed, asistenciasAlumno) {
+    if (!aluId || !pagoId || !asistenciasAlumno) return;
+    const entries = Object.entries(asistenciasAlumno).filter(([, a]) => a && a.pagoId === pagoId);
+    if (entries.length <= maxAllowed) return;
+
+    // Priorizar mantener las clases tomadas
+    const tomadas = entries.filter(([, a]) => a.tomada);
+    const noTomadas = entries.filter(([, a]) => !a.tomada);
+
+    // Calcular cuántas no tomadas conservar para no rebasar el límite nominal
+    const cupoRestante = Math.max(0, maxAllowed - tomadas.length);
+    const aConservar = noTomadas.slice(0, cupoRestante);
+    const aEliminar = noTomadas.slice(cupoRestante);
+
+    for (const [aid] of aEliminar) {
+        delete asistenciasAlumno[aid];
+        await safeRemove(`asistencias/${aluId}/${aid}`);
+    }
+}
+
 // 1B. Alumnos con paquete activo
 async function loadActivePaquetes(filter = '') {
     const containers = [
@@ -477,6 +539,14 @@ async function loadActivePaquetes(filter = '') {
     const hoy = new Date();
     const alertas = [];
 
+    // Sanear asistencias duplicadas en paquetes
+    for (const [id, p] of Object.entries(paquetes)) {
+        if (p && p.alumnoId && asistencias[p.alumnoId]) {
+            const maxBase = parseInt(p.clasesBase || p.tipoPaquete || 4);
+            await sanitizeAsistenciasForPago(p.alumnoId, id, maxBase, asistencias[p.alumnoId]);
+        }
+    }
+
     const activos = Object.entries(paquetes).filter(([id, p]) => {
         if (new Date(p.fechaVencimiento) <= hoy) return false;
         const clases = asistencias[p.alumnoId] ? Object.values(asistencias[p.alumnoId]).filter(a => a.pagoId === id) : [];
@@ -492,8 +562,9 @@ async function loadActivePaquetes(filter = '') {
         const fullName = `${s.nombre || ''} ${s.apellidos || ''}`.trim();
         if (filter && !fullName.toLowerCase().includes(filter.toLowerCase())) return;
 
+        const maxBase = parseInt(p.clasesBase || p.tipoPaquete || 4);
         const clases = asistencias[p.alumnoId] ? Object.values(asistencias[p.alumnoId]).filter(a => a.pagoId === id) : [];
-        const disponibles = clases.filter(a => !a.tomada).length;
+        const disponibles = Math.min(maxBase, clases.filter(a => !a.tomada).length);
         const saldoTxt = p.faltante > 0 ? `<span class="text-red-500 font-bold">$${p.faltante}</span>` : `<span class="text-green-600 font-bold">Pagado ✓</span>`;
 
         const dias = Math.ceil((new Date(p.fechaVencimiento) - hoy) / (1000 * 60 * 60 * 24));
@@ -683,40 +754,64 @@ async function openProfile(aluId) {
     const todasAsistencias = asistSnap.exists() ? asistSnap.val() : {};
     const hoy = new Date();
 
+    // Sanear posibles asistencias duplicadas del alumno
+    for (const [id, p] of Object.entries(pagosP)) {
+        if (p.alumnoId === aluId) {
+            const maxBase = parseInt(p.clasesBase || p.tipoPaquete || 4);
+            await sanitizeAsistenciasForPago(aluId, id, maxBase, todasAsistencias);
+        }
+    }
+    for (const [id, m] of Object.entries(pagosA)) {
+        if (m.alumnoId === aluId) {
+            const maxBase = parseInt((m.clasesBase || 4) + (m.clasesExtra || 0));
+            await sanitizeAsistenciasForPago(aluId, id, maxBase, todasAsistencias);
+        }
+    }
+
     const mensEntry = Object.entries(pagosA).find(([id, p]) => p.alumnoId === aluId && new Date(p.fechaVencimiento) > hoy);
     const mKey = mensEntry ? mensEntry[0] : null;
     const mData = mensEntry ? mensEntry[1] : null;
 
-    const paqEntry = Object.entries(pagosP).find(([id, p]) => {
+    const paqActivos = Object.entries(pagosP).filter(([id, p]) => {
         if (p.alumnoId !== aluId || new Date(p.fechaVencimiento) <= hoy) return false;
         const clases = Object.values(todasAsistencias).filter(a => a.pagoId === id);
         return clases.some(a => !a.tomada);
     });
-    const pkKey = paqEntry ? paqEntry[0] : null;
-    const pkData = paqEntry ? paqEntry[1] : null;
 
     window.app.changeView('profile-view');
     const container = document.getElementById('profile-content');
     if (!container) return;
 
+    // Historial completo de pagos (mensualidades y paquetes: activos, completados y vencidos)
     const historialA = Object.entries(pagosA)
-        .filter(([k, p]) => p.alumnoId === aluId && new Date(p.fechaVencimiento) < hoy && k !== mKey)
-        .map(([k, p]) => ({ id: k, data: p, tipo: 'Mensualidad' }));
+        .filter(([, p]) => p.alumnoId === aluId)
+        .map(([k, p]) => ({ id: k, data: p, tipo: 'Mensualidad', tipoKey: 'A' }));
+
     const historialP = Object.entries(pagosP)
-        .filter(([k, p]) => p.alumnoId === aluId && new Date(p.fechaVencimiento) < hoy && k !== pkKey)
-        .map(([k, p]) => ({ id: k, data: p, tipo: 'Paquete' }));
+        .filter(([, p]) => p.alumnoId === aluId)
+        .map(([k, p]) => ({
+            id: k,
+            data: p,
+            tipo: `Paquete (${p.tipoPaquete || p.clasesBase || 4} Clases)`,
+            tipoKey: 'P'
+        }));
+
     const historial = [...historialA, ...historialP]
-        .sort((a, b) => new Date(b.data.fechaVencimiento) - new Date(a.data.fechaVencimiento));
+        .sort((a, b) => {
+            const fechaA = new Date(a.data.fechaCreacion || a.data.fecha || a.data.fechaVencimiento || 0);
+            const fechaB = new Date(b.data.fechaCreacion || b.data.fecha || b.data.fechaVencimiento || 0);
+            return fechaB - fechaA;
+        });
 
     const renderBloquePlan = (key, data, tipoLabel) => {
         if (!key || !data) return '';
         const vencimiento = new Date(data.fechaVencimiento);
         const dias = Math.ceil((vencimiento - hoy) / (1000 * 60 * 60 * 24));
-        const diasTxt = `Vence en ${dias} día${dias !== 1 ? 's' : ''}`;
-        const badgeClass = dias <= 5 ? "bg-orange-50 text-orange-600" : "bg-green-50 text-green-600";
+        const diasTxt = dias <= 0 ? 'Vencido' : `Vence en ${dias} día${dias !== 1 ? 's' : ''}`;
+        const badgeClass = dias <= 0 ? "bg-red-50 text-red-600" : (dias <= 5 ? "bg-orange-50 text-orange-600" : "bg-green-50 text-green-600");
 
         const clasesPlan = Object.entries(todasAsistencias).filter(([aid, a]) => a.pagoId === key);
-        const totalBase = data.clasesBase || 4;
+        const totalBase = parseInt(data.clasesBase || data.tipoPaquete || 4);
 
         const filasClases = clasesPlan.map(([aid, a], i) => {
             const esUltimaBase = i === (totalBase - 1);
@@ -756,7 +851,7 @@ async function openProfile(aluId) {
         }).join('');
 
         return `
-        <div class="bg-white rounded-3xl p-5 shadow-xs border border-slate-200/70">
+        <div class="bg-white rounded-3xl p-5 shadow-xs border border-slate-200/70 mb-4">
             <div class="flex items-center justify-between mb-2">
                 <h3 class="font-extrabold text-slate-900 text-sm">${tipoLabel}</h3>
                 <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide ${badgeClass}">${diasTxt}</span>
@@ -766,15 +861,20 @@ async function openProfile(aluId) {
         </div>`;
     };
 
+    const bloquesActivosHtml = [
+        mKey ? renderBloquePlan(mKey, mData, 'Mensualidad Activa') : '',
+        ...paqActivos.map(([id, data], i) => renderBloquePlan(id, data, paqActivos.length > 1 ? `Paquete Activo #${i + 1} (${data.tipoPaquete || data.clasesBase || 4} Clases)` : 'Paquete Activo'))
+    ].filter(Boolean).join('');
+
     container.innerHTML = `
-        <div class="bg-white rounded-3xl p-6 shadow-xs border border-slate-200/70 flex flex-col items-center text-center">
+        <div class="bg-white rounded-3xl p-6 shadow-xs border border-slate-200/70 flex flex-col items-center text-center mb-4">
             <div class="size-20 rounded-full bg-gradient-to-tr from-teal-500 to-indigo-500 p-1 shadow-md mb-3 flex items-center justify-center">
                 <div class="w-full h-full bg-white rounded-full flex items-center justify-center text-teal-700 text-3xl font-extrabold">
                     ${s.nombre ? s.nombre[0] : 'A'}${s.apellidos ? s.apellidos[0] : ''}
                 </div>
             </div>
             <h2 class="text-lg font-extrabold text-slate-900">${s.nombre || ''} ${s.apellidos || ''}</h2>
-            <p class="text-xs text-slate-400 mb-4">${(!mKey && !pkKey) ? 'Sin plan activo' : ''}</p>
+            <p class="text-xs text-slate-400 mb-4">${(!mKey && paqActivos.length === 0) ? 'Sin plan activo' : ''}</p>
             <div class="flex gap-3 w-full">
                 <a href="tel:${s.contacto || '#'}" class="flex-1 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-center font-bold text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5">
                     <span class="material-symbols-outlined text-base">call</span>
@@ -787,35 +887,67 @@ async function openProfile(aluId) {
             </div>
         </div>
 
-        ${renderBloquePlan(mKey, mData, 'Mensualidad Activa')}
-        ${renderBloquePlan(pkKey, pkData, 'Paquete Activo')}
+        ${bloquesActivosHtml}
 
         <div class="bg-white rounded-3xl p-5 shadow-xs border border-slate-200/70">
-            <h3 class="text-[10px] font-extrabold text-slate-400 uppercase mb-3 tracking-widest">Historial de Pagos</h3>
-            ${historial.length === 0 ? '<p class="text-sm text-gray-500">No hay pagos anteriores registrados.</p>' : `
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Historial de Pagos</h3>
+                <span class="text-[10px] font-bold text-slate-400">${historial.length} registro${historial.length !== 1 ? 's' : ''}</span>
+            </div>
+            ${historial.length === 0 ? '<p class="text-sm text-gray-500">No hay pagos registrados.</p>' : `
             <div class="overflow-x-auto">
                 <table class="w-full text-xs">
                     <thead>
                         <tr class="border-b border-gray-100">
-                            <th class="text-left text-gray-400 font-bold pb-2 pr-3">ID</th>
-                            <th class="text-left text-gray-400 font-bold pb-2 pr-3">Tipo</th>
-                            <th class="text-left text-gray-400 font-bold pb-2 pr-3">Monto</th>
-                            <th class="text-left text-gray-400 font-bold pb-2 pr-3">Clases tomadas</th>
-                            <th class="text-left text-gray-400 font-bold pb-2">Venció</th>
+                            <th class="text-left text-gray-400 font-bold pb-2 pr-2">ID</th>
+                            <th class="text-left text-gray-400 font-bold pb-2 pr-2">Concepto</th>
+                            <th class="text-left text-gray-400 font-bold pb-2 pr-2">Fecha Pago</th>
+                            <th class="text-left text-gray-400 font-bold pb-2 pr-2">Monto / Saldo</th>
+                            <th class="text-left text-gray-400 font-bold pb-2 pr-2">Clases</th>
+                            <th class="text-left text-gray-400 font-bold pb-2 pr-2">Estado</th>
+                            <th class="text-left text-gray-400 font-bold pb-2">Vence</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-50">
                         ${historial.map(h => {
-                            const clasesTomadas = Object.values(todasAsistencias).filter(a => a.pagoId === h.id && a.tomada).length;
+                            const clasesPlan = Object.values(todasAsistencias).filter(a => a.pagoId === h.id);
+                            const totalBase = parseInt(h.data.clasesBase || h.data.tipoPaquete || 4);
+                            const totalClases = h.tipoKey === 'A' ? (totalBase + parseInt(h.data.clasesExtra || 0)) : totalBase;
+                            const clasesTomadas = clasesPlan.filter(a => a.tomada).length;
+                            const esVencido = new Date(h.data.fechaVencimiento) <= hoy;
+                            const esCompleto = clasesTomadas >= totalClases;
+
+                            let estadoBadge = '';
+                            if (esVencido) {
+                                estadoBadge = '<span class="bg-rose-50 text-rose-600 font-extrabold px-2 py-0.5 rounded-full text-[10px]">Vencido</span>';
+                            } else if (esCompleto) {
+                                estadoBadge = '<span class="bg-slate-100 text-slate-600 font-extrabold px-2 py-0.5 rounded-full text-[10px]">Agotado ✓</span>';
+                            } else {
+                                estadoBadge = '<span class="bg-purple-50 text-purple-700 font-extrabold px-2 py-0.5 rounded-full text-[10px]">Activo</span>';
+                            }
+
+                            const fechaPagoTxt = h.data.fechaCreacion
+                                ? new Date(h.data.fechaCreacion).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+                                : (h.data.fecha ? new Date(h.data.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
+                            const fechaVenceTxt = h.data.fechaVencimiento
+                                ? new Date(h.data.fechaVencimiento).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+                                : '-';
+
+                            const saldoTxt = h.data.faltante > 0
+                                ? `<span class="font-bold text-slate-700">$${h.data.monto}</span> <span class="text-rose-500 font-bold block text-[10px]">Debe $${h.data.faltante}</span>`
+                                : `<span class="font-bold text-slate-700">$${h.data.monto}</span> <span class="text-emerald-600 font-bold block text-[10px]">Pagado ✓</span>`;
+
                             return `
                             <tr>
-                                <td class="py-2 pr-3 font-mono text-gray-500">#${h.id.slice(-6)}</td>
-                                <td class="py-2 pr-3">${h.tipo}</td>
-                                <td class="py-2 pr-3 font-bold text-slate-700">$${h.data.monto}</td>
-                                <td class="py-2 pr-3">
-                                    <span class="bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-full">${clasesTomadas} clases</span>
+                                <td class="py-2.5 pr-2 font-mono text-gray-500">#${h.id.slice(-6)}</td>
+                                <td class="py-2.5 pr-2 font-medium text-slate-800">${h.tipo}</td>
+                                <td class="py-2.5 pr-2 text-slate-500">${fechaPagoTxt}</td>
+                                <td class="py-2.5 pr-2">${saldoTxt}</td>
+                                <td class="py-2.5 pr-2">
+                                    <span class="bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full text-[11px]">${clasesTomadas}/${totalClases}</span>
                                 </td>
-                                <td class="py-2 text-gray-400">${new Date(h.data.fechaVencimiento).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                                <td class="py-2.5 pr-2">${estadoBadge}</td>
+                                <td class="py-2.5 text-gray-400">${fechaVenceTxt}</td>
                             </tr>`;
                         }).join('')}
                     </tbody>
@@ -909,7 +1041,7 @@ async function cargarFinanzas(mes, anio) {
     const fmt = (n) => '$' + parseFloat(n || 0).toFixed(2);
 
     const idsA = Object.entries(pagosA)
-        .filter(([, p]) => esMismoMes(p.fechaVencimiento))
+        .filter(([, p]) => esMismoMes(p.fechaCreacion || p.fechaVencimiento))
         .map(([id, p]) => {
             const alu = alumnos[p.alumnoId] || {};
             const asistAlumno = asistAll[p.alumnoId]
@@ -939,7 +1071,7 @@ async function cargarFinanzas(mes, anio) {
         });
 
     const idsP = Object.entries(pagosP)
-        .filter(([, p]) => esMismoMes(p.fechaVencimiento))
+        .filter(([, p]) => esMismoMes(p.fechaCreacion || p.fechaVencimiento))
         .map(([id, p]) => {
             const alu = alumnos[p.alumnoId] || {};
             const asistAlumno = asistAll[p.alumnoId]
@@ -1410,6 +1542,12 @@ window.seleccionarAlumno = (id, nombreCompleto) => {
 // Registro de pago
 document.getElementById('register-pago-form')?.addEventListener('submit', async e => {
     e.preventDefault();
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+
     const c = document.getElementById('concepto')?.value;
     const monto = parseFloat(document.getElementById('monto')?.value || '0');
     const faltante = parseFloat(document.getElementById('faltante')?.value || '0');
@@ -1419,11 +1557,29 @@ document.getElementById('register-pago-form')?.addEventListener('submit', async 
     let alu = null;
     if (c !== 'actividad_b') {
         alu = document.getElementById('pago-alumno-id')?.value;
-        if (!alu) return alert('Selecciona un alumno antes de continuar.');
+        if (!alu) {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+            return alert('Selecciona un alumno antes de continuar.');
+        }
     }
 
     try {
+        const hoy = new Date();
+
         if (c === 'mensualidad') {
+            // Validar que no tenga mensualidad activa
+            const snapA = await safeGet('pagos_tipo_a');
+            if (snapA.exists()) {
+                const pagos = snapA.val();
+                const tieneMensActiva = Object.values(pagos).some(p => p.alumnoId === alu && new Date(p.fechaVencimiento) > hoy);
+                if (tieneMensActiva) {
+                    return alert('Este alumno ya tiene una mensualidad activa.');
+                }
+            }
+
             const fv = new Date();
             fv.setDate(fv.getDate() + 30);
             const numClasesBase = parseInt(document.getElementById('plan-clases')?.value || '4');
@@ -1450,6 +1606,38 @@ document.getElementById('register-pago-form')?.addEventListener('submit', async 
                 });
             }
         } else if (c === 'paquete_clases') {
+            // Validar que no tenga paquete activo con clases pendientes
+            const [snapA, snapP, snapAsist] = await Promise.all([
+                safeGet('pagos_tipo_a'),
+                safeGet('pagos_paquetes'),
+                safeGet(`asistencias/${alu}`)
+            ]);
+            const asistAlu = snapAsist.exists() ? snapAsist.val() : {};
+
+            if (snapP.exists()) {
+                const pagosP = snapP.val();
+                const tienePaqActivo = Object.entries(pagosP).some(([id, p]) => {
+                    if (p.alumnoId !== alu || new Date(p.fechaVencimiento) <= hoy) return false;
+                    const clases = Object.values(asistAlu).filter(a => a.pagoId === id);
+                    return clases.some(a => !a.tomada);
+                });
+                if (tienePaqActivo) {
+                    return alert('Este alumno ya tiene un paquete activo con clases pendientes.');
+                }
+            }
+
+            if (snapA.exists()) {
+                const pagosA = snapA.val();
+                const tieneMensPendiente = Object.entries(pagosA).some(([id, p]) => {
+                    if (p.alumnoId !== alu || new Date(p.fechaVencimiento) <= hoy) return false;
+                    const clases = Object.values(asistAlu).filter(a => a.pagoId === id);
+                    return clases.some(a => !a.tomada);
+                });
+                if (tieneMensPendiente) {
+                    return alert('Este alumno tiene una mensualidad activa con clases pendientes. Debe agotarlas o esperar su vencimiento antes de comprar un paquete.');
+                }
+            }
+
             const fv = new Date();
             fv.setMonth(fv.getMonth() + 3);
             const numClases = parseInt(document.getElementById('plan-clases')?.value || '4');
@@ -1541,6 +1729,11 @@ document.getElementById('register-pago-form')?.addEventListener('submit', async 
     } catch (error) {
         console.error("Error al procesar pago:", error);
         alert("Error al procesar el pago: " + (error.message || error));
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
     }
 });
 
